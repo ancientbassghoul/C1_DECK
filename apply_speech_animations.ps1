@@ -18,7 +18,7 @@ $oldBubbleParts = @(
 $groupParts = [object[]]@(
     "SpeechBubble_Callout",
     "Mascot",
-    "Mascot_Origin"
+    "Mascot_Pivot_Frame"
 )
 $calloutWidths = @{
     1 = 3.55
@@ -87,6 +87,16 @@ try {
         }
         catch {
             # A fresh generator run has not grouped these shapes yet.
+        }
+
+        # Remove earlier pivot experiments before rebuilding the group.
+        foreach ($pivotShapeName in @("Mascot_Origin", "Mascot_Pivot_Frame")) {
+            try {
+                $slide.Shapes.Item($pivotShapeName).Delete()
+            }
+            catch {
+                # The shape is absent on a fresh build.
+            }
         }
 
         if ($slideNumber -eq 11) {
@@ -179,15 +189,43 @@ try {
         $callout.TextFrame.MarginBottom = 0.04 * $pointsPerInch
 
         $mascot = $slide.Shapes.Item("Mascot")
-        $origin = $slide.Shapes.Item("Mascot_Origin")
         $mascot.Left = $mascotX
         $mascot.Top = $mascotY
         $mascot.Width = $mascotSize
         $mascot.Height = $mascotSize
-        $origin.Left = $mascotOriginX - (0.02 * $pointsPerInch)
-        $origin.Top = $mascotOriginY - (0.02 * $pointsPerInch)
-        $origin.Width = 0.04 * $pointsPerInch
-        $origin.Height = 0.04 * $pointsPerInch
+
+        # Native Zoom scales around the group's bounding-box center. Add a
+        # completely invisible frame whose bounds are symmetric around the
+        # mascot center and contain both visible shapes. This makes the actual
+        # group center equal the desired animation pivot.
+        $visibleLeft = [Math]::Min($callout.Left, $mascot.Left)
+        $visibleTop = [Math]::Min($callout.Top, $mascot.Top)
+        $visibleRight = [Math]::Max(
+            $callout.Left + $callout.Width,
+            $mascot.Left + $mascot.Width
+        )
+        $visibleBottom = [Math]::Max(
+            $callout.Top + $callout.Height,
+            $mascot.Top + $mascot.Height
+        )
+        $pivotHalfWidth = [Math]::Max(
+            $mascotOriginX - $visibleLeft,
+            $visibleRight - $mascotOriginX
+        )
+        $pivotHalfHeight = [Math]::Max(
+            $mascotOriginY - $visibleTop,
+            $visibleBottom - $mascotOriginY
+        )
+        $pivotFrame = $slide.Shapes.AddShape(
+            1,
+            $mascotOriginX - $pivotHalfWidth,
+            $mascotOriginY - $pivotHalfHeight,
+            2.0 * $pivotHalfWidth,
+            2.0 * $pivotHalfHeight
+        )
+        $pivotFrame.Name = "Mascot_Pivot_Frame"
+        $pivotFrame.Fill.Visible = 0
+        $pivotFrame.Line.Visible = 0
 
         $overlay = $slide.Shapes.Range($groupParts).Group()
         $overlay.Name = "SpeechOverlay_Group"
@@ -202,10 +240,11 @@ try {
         $effect.Timing.TriggerType = 1
         $effect.Timing.Accelerate = 0.12
         $effect.Timing.Decelerate = 0.18
+
     }
 
     $presentation.Save()
-    Write-Output "Applied native callouts and Zoom entrances to slides 1, 4, 5, 10, and 11."
+    Write-Output "Applied mascot-centered Zoom entrances to slides 1, 4, 5, 10, and 11."
 }
 finally {
     if ($null -ne $presentation) {

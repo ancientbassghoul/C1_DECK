@@ -32,8 +32,6 @@ SPEECH_TEXT_MARKERS = {
 MASCOT_X = 11.75
 MASCOT_Y = 5.85
 MASCOT_SIZE = 1.48
-MASCOT_ORIGIN_X = MASCOT_X + MASCOT_SIZE / 2
-MASCOT_ORIGIN_Y = MASCOT_Y + MASCOT_SIZE / 2
 SPEECH_BUBBLE_RIGHT = 11.86
 SPEECH_TAIL_TARGET_Y = MASCOT_Y + 0.08
 
@@ -1062,18 +1060,6 @@ def prepare_speech_overlays(prs, mascot_path, serious_mascot_path):
             Inches(MASCOT_SIZE),
         )
         mascot.name = "Mascot"
-
-        origin = slide.shapes.add_shape(
-            MSO_SHAPE.OVAL,
-            Inches(MASCOT_ORIGIN_X - 0.02),
-            Inches(MASCOT_ORIGIN_Y - 0.02),
-            Inches(0.04),
-            Inches(0.04),
-        )
-        origin.fill.background()
-        origin.line.fill.background()
-        origin.name = "Mascot_Origin"
-
 
 def apply_speech_animations(presentation_path, serious_mascot_path):
     """Replace speech parts with native callouts and add Zoom entrances."""
