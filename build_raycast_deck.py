@@ -15,6 +15,9 @@ DEFAULT_DATASET_DIR = SCRIPT_DIR / "dataset"
 DEFAULT_MASCOT_PATH = (
     SCRIPT_DIR / "assets" / "Time_Traveler_Spoilers_Flattened_Transparent.png"
 )
+DEFAULT_SERIOUS_MASCOT_PATH = (
+    SCRIPT_DIR / "assets" / "Time_Traveler_Spoilers_Red_Portal_Transparent.png"
+)
 ANIMATION_SCRIPT = SCRIPT_DIR / "apply_speech_animations.ps1"
 OUTPUT_PPTX = SCRIPT_DIR / "presentation.pptx"
 
@@ -967,10 +970,14 @@ def _shape_fill_rgb(shape):
         return None
 
 
-def prepare_speech_overlays(prs, mascot_path):
+def prepare_speech_overlays(prs, mascot_path, serious_mascot_path):
     """Name, position, and populate the five animated speech overlays."""
     if not mascot_path.exists():
         raise FileNotFoundError(f"Missing mascot asset: {mascot_path}")
+    if not serious_mascot_path.exists():
+        raise FileNotFoundError(
+            f"Missing serious mascot asset: {serious_mascot_path}"
+        )
 
     for slide_number in SPEECH_OVERLAY_SLIDES:
         if slide_number > len(prs.slides):
@@ -1044,8 +1051,11 @@ def prepare_speech_overlays(prs, mascot_path):
         tail.rotation = 180
         tail.name = "SpeechBubble_Tail"
 
+        slide_mascot_path = (
+            serious_mascot_path if slide_number == 11 else mascot_path
+        )
         mascot = slide.shapes.add_picture(
-            str(mascot_path),
+            str(slide_mascot_path),
             Inches(MASCOT_X),
             Inches(MASCOT_Y),
             Inches(MASCOT_SIZE),
@@ -1065,7 +1075,7 @@ def prepare_speech_overlays(prs, mascot_path):
         origin.name = "Mascot_Origin"
 
 
-def apply_speech_animations(presentation_path):
+def apply_speech_animations(presentation_path, serious_mascot_path):
     """Replace speech parts with native callouts and add Zoom entrances."""
     if not ANIMATION_SCRIPT.exists():
         raise FileNotFoundError(f"Missing animation script: {ANIMATION_SCRIPT}")
@@ -1079,6 +1089,8 @@ def apply_speech_animations(presentation_path):
             str(ANIMATION_SCRIPT),
             "-PresentationPath",
             str(presentation_path.resolve()),
+            "-SeriousMascotPath",
+            str(serious_mascot_path.resolve()),
         ],
         cwd=SCRIPT_DIR,
         check=True,
@@ -1418,7 +1430,34 @@ def replace_slide_5_placeholder(prs, visual_5):
     )
 
 
-def build_slide_6(prs):
+def replace_slide_visual(
+    prs, slide_number, image_path, x, y, w, h, shape_name, dark=True
+):
+    """Replace a named slide's visual placeholder without disturbing its text."""
+    slide = prs.slides[slide_number - 1]
+    if any(shape.name == shape_name for shape in slide.shapes):
+        return
+
+    left = Inches(x - 0.04)
+    top = Inches(y - 0.04)
+    right = Inches(x + w + 0.04)
+    bottom = Inches(y + h + 0.04)
+    placeholder_shapes = [
+        shape
+        for shape in slide.shapes
+        if shape.left >= left
+        and shape.top >= top
+        and shape.left + shape.width <= right
+        and shape.top + shape.height <= bottom
+    ]
+    for shape in placeholder_shapes:
+        shape._element.getparent().remove(shape._element)
+
+    picture = add_picture_contain(slide, image_path, x, y, w, h, dark=dark)
+    picture.name = shape_name
+
+
+def build_slide_6(prs, visual_6):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, PRIMARY)
     add_title(
@@ -1458,13 +1497,11 @@ def build_slide_6(prs):
         valign=MSO_ANCHOR.MIDDLE,
     )
 
-    visual_spec = (
-        "I'd like to somehow convey the message that pyceres and geocalib came "
-        "with great promises to replace openCV, but their output was meh. [NTPvChat]"
+    visual_spec = "User-provided visual: Raycast_Slide_6_Visual.png"
+    picture = add_picture_contain(
+        slide, visual_6, 6.50, 1.48, 6.30, 4.98, dark=True
     )
-    add_visual_placeholder(
-        slide, visual_spec, 6.50, 1.48, 6.30, 4.98, dark=True
-    )
+    picture.name = "Slide6_Visual"
 
     add_act_i_rail(slide, 6)
     add_notes(
@@ -1474,7 +1511,7 @@ def build_slide_6(prs):
     )
 
 
-def build_slide_7(prs):
+def build_slide_7(prs, visual_7):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, PRIMARY)
     add_title(slide, "Ten Manual Graphics Overlay Masks", dark=True, font_size=36)
@@ -1504,29 +1541,107 @@ def build_slide_7(prs):
         valign=MSO_ANCHOR.MIDDLE,
     )
 
-    visual_spec = (
-        "The undistorted frame with all 10 mask boxes drawn as colored overlays, "
-        "one color per logical HUD element. [NTPvCode]"
+    visual_spec = "User-provided visual: Raycast_Slide_7_Visual.png"
+    picture = add_picture_contain(
+        slide, visual_7, 6.48, 1.48, 6.32, 4.98, dark=True
     )
-    add_visual_placeholder(
-        slide, visual_spec, 6.48, 1.48, 6.32, 4.98, dark=True
-    )
+    picture.name = "Slide7_Visual"
     add_act_ii_rail(slide, 7)
     add_notes(slide, "", visual_spec=visual_spec)
 
 
-def build_slide_8(prs):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
-    set_background(slide, OFFWHITE)
-    add_title(slide, "The Manual Correspondence Picker Is Born", font_size=35)
+def add_video_placeholder(slide, x, y, w, h):
+    """Add a clean 16:9 frame ready for a future embedded video."""
+    frame = add_rect(
+        slide, x, y, w, h, "E8EDF3", MUTED, radius=True, line_width=1.2
+    )
+    frame.name = "Slide8_Video_Placeholder"
 
-    visual_spec = (
-        "A real screenshot of the grid UI mid-session — cyan/magenta/orange "
-        "markers across several frame tiles. [NTPvCode + OBS]"
+    circle_size = 0.78
+    circle = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL,
+        Inches(x + (w - circle_size) / 2),
+        Inches(y + (h - circle_size) / 2 - 0.08),
+        Inches(circle_size),
+        Inches(circle_size),
     )
-    add_visual_placeholder(
-        slide, visual_spec, 1.75, 1.48, 3.42, 5.15, dark=False
+    circle.fill.solid()
+    circle.fill.fore_color.rgb = rgb(PRIMARY)
+    circle.line.fill.background()
+
+    play = slide.shapes.add_shape(
+        MSO_SHAPE.ISOSCELES_TRIANGLE,
+        Inches(x + w / 2 - 0.13),
+        Inches(y + h / 2 - 0.23),
+        Inches(0.28),
+        Inches(0.34),
     )
+    play.rotation = 90
+    play.fill.solid()
+    play.fill.fore_color.rgb = rgb(WHITE)
+    play.line.fill.background()
+    add_text(
+        slide,
+        "LANDSCAPE VIDEO PLACEHOLDER",
+        x + 0.35,
+        y + h - 0.50,
+        w - 0.70,
+        0.26,
+        11,
+        PRIMARY,
+        font=HEADER_FONT,
+        bold=True,
+        align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+
+
+def add_slide_8_stage_card(slide, number, text, x, font_size):
+    """Add one compact stage in Slide 8's horizontal process row."""
+    y, w, h = 5.72, 2.68, 1.42
+    add_rect(slide, x, y, w, h, WHITE, PALE, radius=True, line_width=1.0)
+    add_text(
+        slide,
+        f"{number:02d}",
+        x + 0.15,
+        y + 0.10,
+        0.36,
+        0.20,
+        9.2,
+        SECONDARY,
+        font=HEADER_FONT,
+        bold=True,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    mark = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE,
+        Inches(x + 0.15),
+        Inches(y + 0.35),
+        Inches(0.34),
+        Inches(0.03),
+    )
+    mark.fill.solid()
+    mark.fill.fore_color.rgb = rgb(SECONDARY)
+    mark.line.fill.background()
+    add_text(
+        slide,
+        text,
+        x + 0.16,
+        y + 0.44,
+        w - 0.32,
+        h - 0.53,
+        font_size,
+        PRIMARY,
+        font=BODY_FONT,
+        valign=MSO_ANCHOR.MIDDLE,
+        margin=0.02,
+    )
+
+
+def layout_slide_8(slide):
+    """Lay out Slide 8 around a central landscape video."""
+    add_title(slide, "The Manual Correspondence Picker Is Born", font_size=35)
+    add_video_placeholder(slide, 3.70, 1.35, 7.25, 4.08)
 
     items = [
         "Multi-frame grid, independent zoom/pan, adjustable marker size",
@@ -1545,17 +1660,38 @@ def build_slide_8(prs):
             "actually discard"
         ),
     ]
-    positions = [(5.42, 1.48), (9.14, 1.48), (5.42, 3.93), (9.14, 3.93)]
-    for index, (text, (x, y)) in enumerate(zip(items, positions), start=1):
-        add_body_card(
-            slide, index, text, x, y, 3.48, 2.20, dark=False, font_size=12.8
-        )
+    positions = [1.75, 4.54, 7.33, 10.12]
+    font_sizes = [10.0, 8.8, 8.6, 9.4]
+    for index, (text, x, font_size) in enumerate(
+        zip(items, positions, font_sizes), start=1
+    ):
+        add_slide_8_stage_card(slide, index, text, x, font_size)
 
+
+def normalize_slide_8_layout(prs):
+    """Rebuild Slide 8's content area without disturbing its rail or notes."""
+    if len(prs.slides) < 8:
+        return
+    slide = prs.slides[7]
+    content_shapes = [
+        shape for shape in slide.shapes if shape.left >= Inches(1.43)
+    ]
+    for shape in content_shapes:
+        shape._element.getparent().remove(shape._element)
+    set_background(slide, OFFWHITE)
+    layout_slide_8(slide)
+
+
+def build_slide_8(prs):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    layout_slide_8(slide)
     add_act_ii_rail(slide, 8)
     add_notes(
         slide,
-        "This is worth a real screenshot, not a mockup — it genuinely looks like a purpose-built desktop app, which surprises people expecting a debug script.",
-        visual_spec=visual_spec,
+        "This is worth a real video, not a mockup — it genuinely looks like a "
+        "purpose-built desktop app, which surprises people expecting a debug script.",
+        visual_spec="Landscape video of the manual correspondence picker in action.",
     )
 
 
@@ -1753,6 +1889,12 @@ def main():
         help="Transparent mascot PNG used by speech overlays.",
     )
     parser.add_argument(
+        "--serious-mascot",
+        type=Path,
+        default=DEFAULT_SERIOUS_MASCOT_PATH,
+        help="Red-portal mascot PNG used on Slide 11 only.",
+    )
+    parser.add_argument(
         "--skip-animations",
         action="store_true",
         help="Save without applying PowerPoint entrance animations.",
@@ -1763,6 +1905,8 @@ def main():
     visual_2 = find_asset(args.visuals_dir, "Raycast_Slide_2_Visual.png")
     visual_4 = find_asset(args.visuals_dir, "Raycast_Slide_4_Visual.png")
     visual_5 = find_asset(args.visuals_dir, "Raycast_Slide_5_Visual.png")
+    visual_6 = find_asset(args.visuals_dir, "Raycast_Slide_6_Visual.png")
+    visual_7 = find_asset(args.visuals_dir, "Raycast_Slide_7_Visual.png")
     sharp_frame = find_asset(args.dataset_dir, "2026-02-15_16-25-03_12035.png")
     blurred_frame = find_asset(args.dataset_dir, "2026-02-15_16-25-03_04681.png")
 
@@ -1790,23 +1934,30 @@ def main():
     if len(prs.slides) == 3:
         build_slide_4(prs, visual_4)
         build_slide_5(prs, visual_5)
-        build_slide_6(prs)
+        build_slide_6(prs, visual_6)
     else:
         replace_slide_5_placeholder(prs, visual_5)
 
     if len(prs.slides) == 6:
-        build_slide_7(prs)
+        build_slide_7(prs, visual_7)
         build_slide_8(prs)
         build_slide_9(prs)
         build_slide_10(prs)
         build_slide_11(prs)
 
+    replace_slide_visual(
+        prs, 6, visual_6, 6.50, 1.48, 6.30, 4.98, "Slide6_Visual", dark=True
+    )
+    replace_slide_visual(
+        prs, 7, visual_7, 6.48, 1.48, 6.32, 4.98, "Slide7_Visual", dark=True
+    )
+    normalize_slide_8_layout(prs)
     normalize_slide_10_title(prs)
     normalize_all_act_rails(prs)
-    prepare_speech_overlays(prs, args.mascot)
+    prepare_speech_overlays(prs, args.mascot, args.serious_mascot)
     prs.save(args.output)
     if not args.skip_animations:
-        apply_speech_animations(args.output)
+        apply_speech_animations(args.output, args.serious_mascot)
     print(args.output)
 
 

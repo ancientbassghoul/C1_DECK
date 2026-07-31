@@ -1,6 +1,10 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$PresentationPath
+    [string]$PresentationPath,
+
+    [string]$SeriousMascotPath = (
+        Join-Path $PSScriptRoot "assets\Time_Traveler_Spoilers_Red_Portal_Transparent.png"
+    )
 )
 
 $ErrorActionPreference = "Stop"
@@ -83,6 +87,20 @@ try {
         }
         catch {
             # A fresh generator run has not grouped these shapes yet.
+        }
+
+        if ($slideNumber -eq 11) {
+            $slide.Shapes.Item("Mascot").Delete()
+            $seriousMascot = $slide.Shapes.AddPicture(
+                (Resolve-Path -LiteralPath $SeriousMascotPath).Path,
+                $false,
+                $true,
+                $mascotX,
+                $mascotY,
+                $mascotSize,
+                $mascotSize
+            )
+            $seriousMascot.Name = "Mascot"
         }
 
         $callout = $null
