@@ -142,7 +142,7 @@ KEEP THESE RULS AT ALL TIMES:
 
 1. VERBATIM TEXT: Every dash (`-`) under `Body:` MUST be its own distinct text item/card.
 2. LAYOUTS: Use 2-column grids for slides with 4+ items.
-3. SPEECH BUBBLES: Format all "Speech bubble:" lines as styled accent cards in the bottom corner.
+3. SPEECH BUBBLES: Format all "Speech bubble:" lines as a single native PowerPoint **Rounded Rectangular Callout** (`MSO_SHAPE.ROUNDED_RECTANGULAR_CALLOUT`, PowerPoint geometry `wedgeRoundRectCallout`) in the bottom corner. NEVER construct a speech bubble from a rounded rectangle plus a separate triangle/tail or a separate text box. Reproduce the established overlay construction exactly: add a completely invisible rectangle named `Mascot_Pivot_Frame` whose bounds enclose the visible callout and mascot and are symmetric around the mascot/portal center. This frame intentionally extends outside the slide, farther down and to the right, so the group's bounding-box center equals the portal center. Group the native callout, mascot, and `Mascot_Pivot_Frame` into one foreground `SpeechOverlay_Group`. The final click Zoom entrance MUST target only `SpeechOverlay_Group`—never its individual children—so callout and mascot scale together from the portal center.
 4. SUBWAY MAP: Maintain the Act rail widget on the left edge (highlighting Act [X] and current slide dots).
 5. KICKERS: Include all "Kicker/subtitle:" text under slide titles.
 

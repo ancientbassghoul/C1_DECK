@@ -243,6 +243,8 @@ Please see the acts we have, their names, and their "rail labels" in the followi
 ## Slide 23.5
 **Title:** MASt3R's Achilles' heel
 **Body:** MASt3R has one weakness - it DRIFTS. We will use QWEN to find a joint anchor in the images, to prevent this.
+**Visual:** Created.
+**Speaker notes:** Next slide shows the method in more detail.
 
 ## Slide 24
 **Title:** Qwen's Job: Find the One Thing Every Frame Shares
@@ -252,9 +254,9 @@ Please see the acts we have, their names, and their "rail labels" in the followi
 
 ## Slide 25
 **Title:** Debug-By-Drawing
-**Body:** `--preview-anchor` draws the detected bbox, label, CLIP weight, and centroid marker directly onto a saved image per frame. This one tool was used to spot the scattered anchor centroids bug, in a couple of slides.
-**📸 Screenshot/recording opportunity:** `venv\Scripts\python raycast.py --frames_dir ./frames --preview-anchor` → `output/debug/anchor/*.jpg`
-**Speaker notes:** Set this up explicitly as "the tool that's about to save the day, repeatedly" — pays off across the next several slides.
+**Body:** Initially, the code was reading QWEN's data wrong, and the Anchor Centroids were offset badly. So we added the `--preview-anchor` arg to get some debug drawing in order to figure out what's going on.
+**visual** a few of the images in the "visuals/anchor" folder
+**Speech bubble:** ...and to presuade Claude that there really IS a coordinate system bug, because it insisted it's a hundred other things.
 
 ---
 

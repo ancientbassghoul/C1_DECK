@@ -26,7 +26,7 @@ DEFAULT_SERIOUS_MASCOT_PATH = (
 ANIMATION_SCRIPT = SCRIPT_DIR / "apply_speech_animations.ps1"
 OUTPUT_PPTX = SCRIPT_DIR / "presentation.pptx"
 
-SPEECH_OVERLAY_SLIDES = (1, 4, 5, 10, 11, 14)
+SPEECH_OVERLAY_SLIDES = (1, 4, 5, 10, 11, 14, 25)
 SPEECH_TEXT_MARKERS = {
     1: "≤10 pixels",
     4: "First commit after",
@@ -34,6 +34,7 @@ SPEECH_TEXT_MARKERS = {
     10: "This exact commit also complains",
     11: "Yeah, so much effort",
     14: "I know the guy",
+    25: "...and to presuade Claude",
 }
 MASCOT_X = 11.75
 MASCOT_Y = 5.85
@@ -154,6 +155,7 @@ ACT_SPECS = [
 ]
 
 ACT_IV_STATIONS = (19, 20, 21, 23)
+ACT_V_STATIONS = (23.5, 24, 25)
 
 
 def rgb(hex_color):
@@ -611,6 +613,8 @@ def add_act_ii_rail(slide, current_slide):
 
 
 def get_act_spec(slide_number):
+    if slide_number == 23.5:
+        return 5, ACT_SPECS[5]
     for act_index, spec in enumerate(ACT_SPECS):
         if spec["start"] <= slide_number <= spec["end"]:
             return act_index, spec
@@ -947,36 +951,41 @@ def add_visual_placeholder(slide, instruction, x, y, w, h, dark=False, split=Fal
 
 
 def add_speech_bubble(slide, text, x, y, w, h, font_size=15.5):
-    bubble = add_rect(slide, x, y, w, h, ACCENT, WHITE, radius=True, line_width=1.2)
-    bubble.name = "SpeechBubble_Background"
-    bubble_text = add_text(
-        slide,
-        text,
-        x + 0.22,
-        y + 0.10,
-        w - 0.44,
-        h - 0.20,
-        font_size,
-        WHITE,
-        font=HEADER_FONT,
-        bold=True,
-        align=PP_ALIGN.CENTER,
-        valign=MSO_ANCHOR.MIDDLE,
+    callout = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGULAR_CALLOUT,
+        Inches(x),
+        Inches(y),
+        Inches(w),
+        Inches(h),
     )
-    bubble_text.name = "SpeechBubble_Text"
-    tail = slide.shapes.add_shape(
-        MSO_SHAPE.ISOSCELES_TRIANGLE,
-        Inches(x + w - 0.58),
-        Inches(y + h - 0.04),
-        Inches(0.38),
-        Inches(0.28),
-    )
-    tail.rotation = 180
-    tail.fill.solid()
-    tail.fill.fore_color.rgb = rgb(ACCENT)
-    tail.line.fill.background()
-    tail.name = "SpeechBubble_Tail"
-    return bubble
+    callout.name = "SpeechBubble_Callout"
+    callout.fill.solid()
+    callout.fill.fore_color.rgb = rgb(ACCENT)
+    callout.line.color.rgb = rgb(WHITE)
+    callout.line.width = Pt(1.2)
+    for index, value in enumerate((0.45, 0.85, 0.16667)):
+        callout.adjustments[index] = value
+
+    frame = callout.text_frame
+    frame.clear()
+    frame.word_wrap = True
+    frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+    frame.margin_left = Inches(0.14)
+    frame.margin_right = Inches(0.14)
+    frame.margin_top = Inches(0.04)
+    frame.margin_bottom = Inches(0.04)
+    paragraph = frame.paragraphs[0]
+    paragraph.alignment = PP_ALIGN.CENTER
+    paragraph.space_before = Pt(0)
+    paragraph.space_after = Pt(0)
+    paragraph.line_spacing = 1.0
+    run = paragraph.add_run()
+    run.text = text
+    run.font.name = HEADER_FONT
+    run.font.size = Pt(font_size)
+    run.font.bold = True
+    run.font.color.rgb = rgb(WHITE)
+    return callout
 
 
 def _shape_fill_rgb(shape):
@@ -1000,6 +1009,25 @@ def prepare_speech_overlays(prs, mascot_path, serious_mascot_path):
             continue
         slide = prs.slides[slide_number - 1]
         if any(shape.name == "SpeechOverlay_Group" for shape in slide.shapes):
+            continue
+
+        native_callout = next(
+            (shape for shape in slide.shapes if shape.name == "SpeechBubble_Callout"),
+            None,
+        )
+        if native_callout is not None:
+            if not any(shape.name == "Mascot" for shape in slide.shapes):
+                slide_mascot_path = (
+                    serious_mascot_path if slide_number == 11 else mascot_path
+                )
+                mascot = slide.shapes.add_picture(
+                    str(slide_mascot_path),
+                    Inches(MASCOT_X),
+                    Inches(MASCOT_Y),
+                    Inches(MASCOT_SIZE),
+                    Inches(MASCOT_SIZE),
+                )
+                mascot.name = "Mascot"
             continue
 
         for shape in list(slide.shapes):
@@ -2008,22 +2036,74 @@ def configure_video_click_timing(
     slide_element.append(timing)
 
 
+def group_speech_overlay_with_mascot_pivot(slide, visible_shapes):
+    """Group a speech overlay around an invisible mascot-centered pivot frame."""
+    visible_shapes = list(visible_shapes)
+    mascot = next((shape for shape in visible_shapes if shape.name == "Mascot"), None)
+    if mascot is None:
+        raise ValueError("Speech overlay cannot be grouped without a Mascot shape.")
+
+    mascot_origin_x = mascot.left + mascot.width // 2
+    mascot_origin_y = mascot.top + mascot.height // 2
+    visible_left = min(shape.left for shape in visible_shapes)
+    visible_top = min(shape.top for shape in visible_shapes)
+    visible_right = max(shape.left + shape.width for shape in visible_shapes)
+    visible_bottom = max(shape.top + shape.height for shape in visible_shapes)
+    pivot_half_width = max(
+        mascot_origin_x - visible_left,
+        visible_right - mascot_origin_x,
+    )
+    pivot_half_height = max(
+        mascot_origin_y - visible_top,
+        visible_bottom - mascot_origin_y,
+    )
+    pivot_frame = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE,
+        mascot_origin_x - pivot_half_width,
+        mascot_origin_y - pivot_half_height,
+        2 * pivot_half_width,
+        2 * pivot_half_height,
+    )
+    pivot_frame.name = "Mascot_Pivot_Frame"
+    pivot_frame.fill.background()
+    pivot_frame.line.fill.background()
+
+    overlay_group = slide.shapes.add_group_shape(
+        [*visible_shapes, pivot_frame]
+    )
+    overlay_group.name = "SpeechOverlay_Group"
+    return overlay_group
+
+
 def configure_speech_overlay_click_timing(prs, slide_number):
     """Reveal all speech-overlay pieces together on one click without COM."""
     if len(prs.slides) < slide_number:
         return
     slide = prs.slides[slide_number - 1]
-    overlay_names = (
-        "SpeechBubble_Background",
-        "SpeechBubble_Text",
-        "SpeechBubble_Tail",
-        "Mascot",
+    overlay_group = next(
+        (shape for shape in slide.shapes if shape.name == "SpeechOverlay_Group"),
+        None,
     )
-    overlay_shapes = [
-        next((shape for shape in slide.shapes if shape.name == name), None)
-        for name in overlay_names
-    ]
-    overlay_shapes = [shape for shape in overlay_shapes if shape is not None]
+    if overlay_group is not None:
+        overlay_shapes = [overlay_group]
+    else:
+        overlay_names = (
+            "SpeechBubble_Callout",
+            "SpeechBubble_Background",
+            "SpeechBubble_Text",
+            "SpeechBubble_Tail",
+            "Mascot",
+        )
+        overlay_shapes = [
+            next((shape for shape in slide.shapes if shape.name == name), None)
+            for name in overlay_names
+        ]
+        overlay_shapes = [shape for shape in overlay_shapes if shape is not None]
+        if len(overlay_shapes) > 1:
+            overlay_group = group_speech_overlay_with_mascot_pivot(
+                slide, overlay_shapes
+            )
+            overlay_shapes = [overlay_group]
     if not overlay_shapes:
         return
 
@@ -2790,6 +2870,142 @@ def build_slide_23(prs, visual_23=None):
     )
 
 
+def build_slide_23_5(prs, visual_23_5=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "MASt3R's Achilles' heel", dark=True, font_size=38)
+
+    body = (
+        "MASt3R has one weakness - it DRIFTS. We will use QWEN to find a joint anchor in the images, to prevent this."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.78, 4.38, 4.32, 20.0, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = "Created."
+    if visual_23_5 is not None:
+        picture = add_picture_contain(
+            slide, visual_23_5, 7.04, 1.48, 5.76, 4.98, dark=True
+        )
+        picture.name = "Slide23_5_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=True)
+    add_inline_act_rail(slide, 23.5, ACT_V_STATIONS)
+    add_notes(
+        slide,
+        "Next slide shows the method in more detail.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_24(prs, visual_24=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "Qwen's Job: Find the One Thing Every Frame Shares", font_size=33)
+
+    body = (
+        "Per frame: list every man-made object, bbox + label. Across all frames: consolidate labels, rank by how many frames contain each one. Among the top-coverage candidates, a second Qwen call — reasoning over label text alone — picks the single best fixed 3D reference point. Output: that object's pixel centroid in every frame it appears in, weighted by CLIP confidence."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.70, 4.38, 4.52, 15.4, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A 3-step flow: "find everything" → "which label shows up everywhere" → "which of those is trustworthy" — with the van as the visual through-line landing at the end. [NTPvChat]'
+    )
+    if visual_24 is not None:
+        picture = add_picture_contain(slide, visual_24, 7.04, 1.48, 5.76, 4.98, dark=False)
+        picture.name = "Slide24_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=False)
+    add_inline_act_rail(slide, 24, ACT_V_STATIONS)
+    add_notes(
+        slide,
+        'Emphasize this is open-world — nothing here hardcodes "find the van." It discovers that the van is the answer.',
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_25(prs, anchor_images, mascot_path):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Debug-By-Drawing", dark=True, font_size=40)
+
+    body_segments = (
+        ("Initially, the code was reading QWEN's data wrong, and the Anchor Centroids were offset badly. So we added the ", BODY_FONT),
+        ("--preview-anchor", "Cascadia Mono"),
+        (" arg to get some debug drawing in order to figure out what's going on.", BODY_FONT),
+    )
+    add_rect(slide, 1.75, 1.48, 4.15, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_rich_text(
+        slide, body_segments, 2.07, 1.76, 3.51, 4.40, 17.0, OFFWHITE,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    visual_spec = 'a few of the images in the "anchor" folder'
+    add_rect(slide, 6.15, 1.48, 6.65, 4.98, "182338", "516177", radius=True, line_width=1.2)
+    slots = (
+        (6.30, 1.83),
+        (9.60, 1.83),
+        (6.30, 3.84),
+        (9.60, 3.84),
+    )
+    for index, ((x, y), image_path) in enumerate(zip(slots, anchor_images), start=1):
+        picture = add_rounded_picture_cover(slide, image_path, x, y, 3.05, 1.72, line_color="516177")
+        picture.name = f"Slide25_Anchor_{index}"
+
+    add_inline_act_rail(slide, 25, ACT_V_STATIONS)
+    bubble_text = (
+        "...and to presuade Claude that there really IS a coordinate system bug, because it insisted it's a hundred other things."
+    )
+    add_speech_bubble(slide, bubble_text, 6.32, 4.72, 5.28, 1.05, font_size=13.0)
+    mascot = slide.shapes.add_picture(
+        str(mascot_path),
+        Inches(MASCOT_X),
+        Inches(MASCOT_Y),
+        Inches(MASCOT_SIZE),
+        Inches(MASCOT_SIZE),
+    )
+    mascot.name = "Mascot"
+    configure_speech_overlay_click_timing(prs, 25)
+    add_notes(slide, "", visual_spec=visual_spec)
+
+
+def refresh_slide_25_callout(prs, mascot_path):
+    """Replace Slide 25's legacy composite bubble with one native callout."""
+    if len(prs.slides) != 25:
+        raise ValueError(f"Expected 25 slides, found {len(prs.slides)}.")
+    slide = prs.slides[24]
+    legacy_names = {
+        "SpeechOverlay_Group",
+        "Mascot_Pivot_Frame",
+        "SpeechBubble_Background",
+        "SpeechBubble_Text",
+        "SpeechBubble_Tail",
+        "SpeechBubble_Callout",
+        "Mascot",
+    }
+    for shape in list(slide.shapes):
+        if shape.name in legacy_names:
+            shape._element.getparent().remove(shape._element)
+
+    bubble_text = (
+        "...and to presuade Claude that there really IS a coordinate system bug, because it insisted it's a hundred other things."
+    )
+    add_speech_bubble(slide, bubble_text, 6.32, 4.72, 5.28, 1.05, font_size=13.0)
+    mascot = slide.shapes.add_picture(
+        str(mascot_path),
+        Inches(MASCOT_X),
+        Inches(MASCOT_Y),
+        Inches(MASCOT_SIZE),
+        Inches(MASCOT_SIZE),
+    )
+    mascot.name = "Mascot"
+    configure_speech_overlay_click_timing(prs, 25)
+
+
 def refresh_slides_15_18(prs, visual_15, visual_16, video_17, poster_17, visual_18):
     """Replace Slides 15–18 visual placeholders without changing their text."""
     if len(prs.slides) != 18:
@@ -2834,7 +3050,7 @@ def normalize_slide_10_title(prs):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build the Raycast Challenge deck through Act IV, skipping Slide 22."
+        description="Build the Raycast Challenge deck through Act V, skipping Slide 22."
     )
     parser.add_argument(
         "--visuals-dir",
@@ -2886,6 +3102,11 @@ def main():
         action="store_true",
         help="Replace only Slide 20 with its approved rewrite.",
     )
+    parser.add_argument(
+        "--refresh-slide-25-callout",
+        action="store_true",
+        help="Replace Slide 25's speech overlay with a native PowerPoint callout.",
+    )
     args = parser.parse_args()
 
     visual_1 = find_asset(args.visuals_dir, "Raycast_Slide_1_Visual.png")
@@ -2914,6 +3135,18 @@ def main():
     visual_20 = find_asset(args.visuals_dir, "Raycast_Slide_20_NEW_Visual.png")
     visual_21 = find_asset(args.visuals_dir, "Raycast_Slide_21_Visual.png")
     visual_23 = find_asset(args.visuals_dir, "Raycast_Slide_23_Visual.png")
+    visual_23_5 = find_asset(args.visuals_dir, "Raycast_Slide_23.5_Visual.png")
+    visual_24 = find_asset(args.visuals_dir, "Raycast_Slide_24_Visual.png")
+    anchor_dir = args.visuals_dir / "anchor"
+    anchor_images = tuple(
+        find_asset(anchor_dir, filename)
+        for filename in (
+            "2026-02-15_16-25-03_04569_anchor.jpg",
+            "2026-02-15_16-25-03_04709_anchor.jpg",
+            "2026-02-15_16-25-03_10671_anchor.jpg",
+            "2026-02-15_16-35-56_09763_anchor.jpg",
+        )
+    )
     frame_ids = ("04709", "04752", "10671")
     app_cam_paths = tuple(
         find_asset(args.visuals_dir, f"app_cam_{frame_id}_in_blender.png")
@@ -2929,9 +3162,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():
         prs = Presentation(str(args.output))
-        if len(prs.slides) not in (3, 6, 11, 14, 18, 22):
+        if len(prs.slides) not in (3, 6, 11, 14, 18, 22, 25):
             raise ValueError(
-                f"Expected 3, 6, 11, 14, 18, or 22 existing slides in {args.output}, "
+                f"Expected 3, 6, 11, 14, 18, 22, or 25 existing slides in {args.output}, "
                 f"found {len(prs.slides)}."
             )
         starting_slide_count = len(prs.slides)
@@ -2968,6 +3201,12 @@ def main():
         print(args.output)
         return
 
+    if args.refresh_slide_25_callout:
+        refresh_slide_25_callout(prs, args.mascot)
+        prs.save(args.output)
+        print(args.output)
+        return
+
     if args.refresh_slides_15_18:
         refresh_slides_15_18(
             prs, visual_15, visual_16, video_17, poster_17, visual_18
@@ -2997,6 +3236,14 @@ def main():
         return
 
     if starting_slide_count == 22:
+        build_slide_23_5(prs, visual_23_5)
+        build_slide_24(prs, visual_24)
+        build_slide_25(prs, anchor_images, args.mascot)
+        prs.save(args.output)
+        print(args.output)
+        return
+
+    if starting_slide_count == 25:
         print(args.output)
         return
 
