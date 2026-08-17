@@ -1,7 +1,10 @@
 from pathlib import Path
 import argparse
+import os
 import subprocess
+from zipfile import ZIP_DEFLATED, ZipFile
 
+from lxml import etree
 from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
@@ -149,6 +152,8 @@ ACT_SPECS = [
         "end": 40,
     },
 ]
+
+ACT_IV_STATIONS = (19, 20, 21, 23)
 
 
 def rgb(hex_color):
@@ -612,9 +617,19 @@ def get_act_spec(slide_number):
     raise ValueError(f"Slide {slide_number} is outside the configured 40-slide deck.")
 
 
-def add_inline_act_rail(slide, current_slide):
+def add_inline_act_rail(slide, current_slide, station_slides=None):
     """Render the active act as an inline accordion in chronological order."""
     active_index, active_spec = get_act_spec(current_slide)
+    if station_slides is None:
+        station_slides = tuple(
+            range(active_spec["start"], active_spec["end"] + 1)
+        )
+    else:
+        station_slides = tuple(station_slides)
+    if current_slide not in station_slides:
+        raise ValueError(
+            f"Current slide {current_slide} is not in the active station list."
+        )
     rail = add_rect(slide, 0, 0, 1.42, SLIDE_H, PRIMARY, None, radius=False)
 
     header_text = f'ACT {active_spec["number"]} —\n{active_spec["header"]}'
@@ -643,7 +658,7 @@ def add_inline_act_rail(slide, current_slide):
     list_y = 1.18
     collapsed_h = 0.37
     station_step = 0.20
-    station_count = active_spec["end"] - active_spec["start"] + 1
+    station_count = len(station_slides)
     active_h = collapsed_h + station_count * station_step + 0.13
 
     for act_index, spec in enumerate(ACT_SPECS):
@@ -729,7 +744,7 @@ def add_inline_act_rail(slide, current_slide):
             station_line.fill.fore_color.rgb = rgb(MUTED)
             station_line.line.fill.background()
 
-        current_station = current_slide - spec["start"]
+        current_station = station_slides.index(current_slide)
         for station_index, dot_y in enumerate(dot_ys):
             dot = slide.shapes.add_shape(
                 MSO_SHAPE.OVAL,
@@ -1105,6 +1120,57 @@ def apply_speech_animations(presentation_path, serious_mascot_path):
     )
     if result.stdout.strip():
         print(result.stdout.strip())
+
+
+def configure_slide17_video(presentation_path):
+    """Make Slide 17's media-play effect automatic in the PowerPoint timeline."""
+    presentation_path = Path(presentation_path).resolve()
+    temporary_path = presentation_path.with_suffix(".autoplay.tmp.pptx")
+    slide_part = "ppt/slides/slide17.xml"
+    namespaces = {
+        "p": "http://schemas.openxmlformats.org/presentationml/2006/main"
+    }
+
+    with ZipFile(presentation_path, "r") as source:
+        slide_xml = etree.fromstring(source.read(slide_part))
+        play_commands = slide_xml.xpath(
+            ".//p:cmd[starts-with(@cmd, 'playFrom')]", namespaces=namespaces
+        )
+        if len(play_commands) != 1:
+            raise ValueError(
+                f"Expected one Slide 17 media-play command, found {len(play_commands)}."
+            )
+
+        play_timing_node = play_commands[0].xpath(
+            "ancestor::p:cTn[@nodeType='clickEffect'][1]", namespaces=namespaces
+        )
+        if len(play_timing_node) != 1:
+            raise ValueError("Could not locate Slide 17's click-triggered media effect.")
+        play_timing_node[0].set("nodeType", "withEffect")
+
+        start_conditions = slide_xml.xpath(
+            ".//p:cTn[@nodeType='mainSeq']/p:childTnLst/p:par/p:cTn/"
+            "p:stCondLst/p:cond[@delay='indefinite']",
+            namespaces=namespaces,
+        )
+        if len(start_conditions) != 1:
+            raise ValueError(
+                "Could not uniquely locate Slide 17's media start condition."
+            )
+        start_conditions[0].set("delay", "0")
+        updated_slide_xml = etree.tostring(
+            slide_xml, xml_declaration=True, encoding="UTF-8", standalone=True
+        )
+
+        with ZipFile(temporary_path, "w", compression=ZIP_DEFLATED) as target:
+            for item in source.infolist():
+                payload = (
+                    updated_slide_xml if item.filename == slide_part else source.read(item)
+                )
+                target.writestr(item, payload)
+
+    os.replace(temporary_path, presentation_path)
+    print("Slide 17 video set to start automatically with the slide.")
 
 
 def add_notes(slide, notes, source=None, visual_spec=None):
@@ -2428,6 +2494,331 @@ def refresh_act_iii(prs, visual_12_01, visual_12_02, app_cam_paths, rigged_cam_p
     bring_speech_overlays_to_front(prs)
 
 
+def build_slide_15(prs, visual_15=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "The Answers", dark=True, font_size=40)
+
+    cards = (
+        (
+            1.48,
+            2.20,
+            "Vector 1 — Let us save you from yourself: DROP the custom YOLO idea. Instead, pair an open-dictionary vision-language model (Qwen) with CLIP embeddings to dynamically discover and correlate geometric anchors, no predefined target needed.",
+            SECONDARY,
+        ),
+        (
+            3.86,
+            1.62,
+            "Vector 2 — Yes, upgrade the solve engine, but use MASt3R, which outputs dense 3D maps and local features jointly.",
+            SECONDARY,
+        ),
+    )
+    for y, h, text, color in cards:
+        add_rect(slide, 1.75, y, 5.92, h, DEEP, "334155", radius=True, line_width=1.1)
+        add_text(
+            slide, text, 2.05, y + 0.20, 5.32, h - 0.40, 15.2,
+            OFFWHITE, font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+        )
+        marker = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE,
+            Inches(1.75), Inches(y), Inches(0.065), Inches(h),
+        )
+        marker.fill.solid()
+        marker.fill.fore_color.rgb = rgb(color)
+        marker.line.fill.background()
+
+    add_rect(slide, 1.75, 5.66, 5.92, 0.80, "182338", SECONDARY, radius=True, line_width=1.0)
+    add_text(
+        slide,
+        "Both technologies that show up in the codebase exactly six days later were named, specifically, in this document.",
+        2.03, 5.81, 5.36, 0.48, 13.2, SECONDARY,
+        font=HEADER_FONT, bold=True, valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    visual_spec = (
+        'Cartoon image: YOLO8 character laying on the ground unconscious, A drone titled "Xtend" with a spring boxing glove unhinged (it had just knocked out YOLO8 character), me looking at the drone in a "oh no, don\'t hurt YOLO8 character!" pose. [NTPvChat]'
+    )
+    if visual_15 is not None:
+        picture = add_picture_contain(slide, visual_15, 7.95, 1.48, 4.85, 4.98, dark=True)
+        picture.name = "Slide15_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.95, 1.48, 4.85, 4.98, dark=True)
+    add_inline_act_rail(slide, 15)
+    add_notes(
+        slide,
+        "Worth naming plainly: this wasn't an independent rethink arrived at in isolation. It was a direct, specific technical directive, followed closely. That's a more honest and more interesting story than \"we had a eureka moment\" — say so. Also plant this, quietly, for later: the feedback doc suggests a CLIP cosine-similarity cutoff of >0.85. Remember that number.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_16(prs, visual_16=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "The Pivot We Said No To", font_size=40)
+
+    body = (
+        "A follow-up call raised a third option: move to continuous video, reconstructed by MASt3R, potentially easing multi-drone alignment altogether. Declined - on basis of: The hardware on hand couldn't support it, lack of data, and some research alerting MASt3R drifting, without a good anchor, Qwen could supply. Rather than chase a second rabbit hole while still climbing out of the first, the project stayed the course."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.78, 4.38, 4.32, 16.5, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A simple fork-in-the-road diagram: one path taken (labeled "frames + MASt3R + Qwen"), one path greyed out and clearly signposted "not this time" (labeled "continuous video reconstruction"). [NTPvChat]'
+    )
+    if visual_16 is not None:
+        picture = add_picture_contain(slide, visual_16, 7.04, 1.48, 5.76, 4.98, dark=False)
+        picture.name = "Slide16_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=False)
+    add_inline_act_rail(slide, 16)
+    add_notes(
+        slide,
+        "This is a scope-discipline beat, not a modesty beat — worth saying plainly that turning down a good idea, on purpose, because of real constraints, is its own kind of engineering judgment.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_17(prs, video_17=None, poster_17=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_text(
+        slide, "Deep", 1.75, 0.36, 1.42, 0.62, 40, ACCENT,
+        font=HEADER_FONT, bold=True, valign=MSO_ANCHOR.MIDDLE,
+    )
+    strike = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(1.74), Inches(0.68), Inches(1.06), Inches(0.045)
+    )
+    strike.fill.solid()
+    strike.fill.fore_color.rgb = rgb(ACCENT)
+    strike.line.fill.background()
+    add_text(
+        slide, "Fast Learning", 3.18, 0.36, 4.00, 0.62, 40, WHITE,
+        font=HEADER_FONT, bold=True, valign=MSO_ANCHOR.MIDDLE,
+    )
+    accent = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(1.75), Inches(1.10), Inches(0.78), Inches(0.055)
+    )
+    accent.fill.solid()
+    accent.fill.fore_color.rgb = rgb(SECONDARY)
+    accent.line.fill.background()
+
+    body = (
+        "Report sent May 31st. Feedback landed June 8th (previous two slides). Between the answer arriving and development actually resuming June 14th: a week of DeepLearning.AI coursework — Agentic AI, and a Claude-specific course."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.78, 4.38, 4.32, 18.0, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = 'Maybe the "I know Code Too" meme. [NTPvCode]'
+    if video_17 is not None and poster_17 is not None:
+        add_movie_contain(
+            slide, video_17, poster_17, 7.04, 1.48, 5.76, 4.98,
+            "Slide17_Video", dark=True,
+        )
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=True)
+    add_inline_act_rail(slide, 17)
+    add_notes(
+        slide,
+        "Frame this as \"here's what filled the rest of the visible gap,\" not as the reveal itself — the reveal already happened two slides ago.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_18(prs, visual_18=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "Tools, Tokens and Model Diversity", font_size=36)
+
+    body = (
+        "Up until now, work got done in Claude's web chat. Files were moved manually, which felt frugal but measurably wasn't. Same day as the pivot commit, development moved to Claude Code: more output, less friction, immediately. Second habit, formed alongside it: plan in Claude Code, get a second opinion from Gemini, feed that back into implementation — cross-AI review that caught logic bugs early and kept plan-level questions off Claude's context."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.75, 4.38, 4.44, 15.8, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'Two small workflow loops side by side. Before: Human ↔ (manual upload/download) ↔ Claude web chat, drawn with visible friction (a little "⏳" or paperclip icon on the transfer arrows). After: a triangle — Human/Claude Code plan → Gemini review → feedback back into Claude Code for implementation. [NTPvChat]'
+    )
+    if visual_18 is not None:
+        picture = add_picture_contain(slide, visual_18, 7.04, 1.48, 5.76, 4.98, dark=False)
+        picture.name = "Slide18_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=False)
+    add_inline_act_rail(slide, 18)
+    add_notes(
+        slide,
+        "Not a confession — a measured course-correction, same honesty the rest of this deck runs on: an assumed efficiency that turned out to be a false economy once actually checked against outcomes, not intuition. Good beat to close the act on, since it's the actual last thing that changed before the pivot itself.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_19(prs, visual_19=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Heart Surgery", dark=True, font_size=40)
+
+    body = (
+        "Deleted outright: LightGlue, GroundingDINO, SAM, SuperPoint, the debug UI built for them. In: MASt3R-SfM (dense 3D reconstruction + camera poses) + Qwen VL (open-world object discovery) + CLIP (confidence weighting)."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.78, 4.38, 4.32, 17.0, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A stark "DELETED" vs "ADDED" two-column list, red strikethrough vs. green. [NTPvChat]'
+    )
+    if visual_19 is not None:
+        picture = add_picture_contain(slide, visual_19, 7.04, 1.48, 5.76, 4.98, dark=True)
+        picture.name = "Slide19_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=True)
+    add_inline_act_rail(slide, 19, ACT_IV_STATIONS)
+    add_notes(
+        slide,
+        "Don't soften this one — the scale of the rewrite is the point. Everything code-related from Act II except the OCR/GPS core and `camera_deltas.py` is gone. (Act III was never code to begin with — it's the human decision that triggered this slide.)",
+        visual_spec=visual_spec,
+    )
+
+
+def layout_slide_20(slide, visual_20=None):
+    set_background(slide, OFFWHITE)
+    add_title(slide, "Enter MASt3R", font_size=40)
+
+    body = (
+        "The old stack just couldn't crack it, and something smarter was needed. MASt3R's dense reconstruction could handle the low-texture, repetitive ground the old feature matchers choked on."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.78, 4.38, 4.32, 19.0, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = "Created."
+    if visual_20 is not None:
+        picture = add_picture_contain(slide, visual_20, 7.04, 1.48, 5.76, 4.98, dark=False)
+        picture.name = "Slide20_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=False)
+    add_notes(
+        slide,
+        "Mention that this magic requires better hardware.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_20(prs, visual_20=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    layout_slide_20(slide, visual_20)
+    add_inline_act_rail(slide, 20, ACT_IV_STATIONS)
+
+
+def refresh_slide_20(prs, visual_20=None):
+    """Replace only Slide 20's approved content, preserving its Act IV rail."""
+    if len(prs.slides) != 22:
+        raise ValueError(f"Expected 22 slides, found {len(prs.slides)}.")
+    slide = prs.slides[19]
+    for shape in list(slide.shapes):
+        if shape.left >= Inches(1.43):
+            shape._element.getparent().remove(shape._element)
+    layout_slide_20(slide, visual_20)
+
+
+def build_slide_21(prs, visual_21=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Step Zero: Get a GPU", dark=True, font_size=40)
+
+    body = (
+        "RunPod, chosen over Google Colab specifically because Colab's runtimes wipe on timeout — meaning MASt3R's CUDA/C++ kernels would need recompiling from scratch every session, versus RunPod's persistent volume storage compiling once and staying ready."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.78, 4.38, 4.32, 17.0, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A simple two-box comparison card, Colab vs. RunPod, with the "recompile every session" vs "compile once" distinction as the headline. [NTPvChat]'
+    )
+    if visual_21 is not None:
+        picture = add_picture_contain(slide, visual_21, 7.04, 1.48, 5.76, 4.98, dark=True)
+        picture.name = "Slide21_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=True)
+    add_inline_act_rail(slide, 21, ACT_IV_STATIONS)
+    add_notes(
+        slide,
+        "Frame this as an actual evaluated decision, not a default — it's easy to skip over infrastructure choices in a deck, don't.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_23(prs, visual_23=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "Compute Headless in the Cloud, Test Locally", font_size=35)
+
+    body_segments = (
+        ("RunPod has no display; the interactive viewer needs one. ", BODY_FONT),
+        ("--export-solve", "Cascadia Mono"),
+        (" runs the full pipeline remotely and serializes camera poses + terrain point clouds to disk. Those files travel to the local machine, where ", BODY_FONT),
+        ("--import-solve", "Cascadia Mono"),
+        (" skips OCR/MASt3R/Ceres entirely and opens the viewer straight against the already-solved cameras.", BODY_FONT),
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_rich_text(
+        slide, body_segments, 2.07, 1.72, 4.38, 4.48, 15.8, PRIMARY,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A literal "cloud → local" diagram: RunPod box producing `solved_cameras.json` + point-cloud files, an arrow labeled "copy down," a local laptop box opening the viewer. [NTPvChat]'
+    )
+    if visual_23 is not None:
+        picture = add_picture_contain(slide, visual_23, 7.04, 1.48, 5.76, 4.98, dark=False)
+        picture.name = "Slide23_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=False)
+    add_inline_act_rail(slide, 23, ACT_IV_STATIONS)
+    add_notes(
+        slide,
+        "Close this slide on the line that sets up the next act: for most of this project, the only thing crossing that gap was a handful of numbers — the actual 3D reconstruction never left the pod. That's about to matter.",
+        visual_spec=visual_spec,
+    )
+
+
+def refresh_slides_15_18(prs, visual_15, visual_16, video_17, poster_17, visual_18):
+    """Replace Slides 15–18 visual placeholders without changing their text."""
+    if len(prs.slides) != 18:
+        raise ValueError(f"Expected 18 slides, found {len(prs.slides)}.")
+
+    specs = (
+        (15, 7.85, visual_15, "picture", True, "Slide15_Visual"),
+        (16, 6.94, visual_16, "picture", False, "Slide16_Visual"),
+        (17, 6.94, video_17, "movie", True, "Slide17_Video"),
+        (18, 6.94, visual_18, "picture", False, "Slide18_Visual"),
+    )
+    for slide_number, threshold, asset, kind, dark, shape_name in specs:
+        slide = prs.slides[slide_number - 1]
+        for shape in list(slide.shapes):
+            if shape.left >= Inches(threshold) and Inches(1.30) <= shape.top < Inches(6.60):
+                shape._element.getparent().remove(shape._element)
+
+        x = 7.95 if slide_number == 15 else 7.04
+        w = 4.85 if slide_number == 15 else 5.76
+        if kind == "movie":
+            add_movie_contain(
+                slide, asset, poster_17, x, 1.48, w, 4.98,
+                shape_name, dark=dark,
+            )
+        else:
+            picture = add_picture_contain(slide, asset, x, 1.48, w, 4.98, dark=dark)
+            picture.name = shape_name
+
+
 def normalize_slide_10_title(prs):
     """Keep the long Slide 10 title clear of the accent rule in existing decks."""
     if len(prs.slides) < 10:
@@ -2443,7 +2834,7 @@ def normalize_slide_10_title(prs):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build the Raycast Challenge deck through Act III, Slide 14."
+        description="Build the Raycast Challenge deck through Act IV, skipping Slide 22."
     )
     parser.add_argument(
         "--visuals-dir",
@@ -2485,6 +2876,16 @@ def main():
         action="store_true",
         help="Refresh only Slides 12–14 in an existing 14-slide deck.",
     )
+    parser.add_argument(
+        "--refresh-slides-15-18",
+        action="store_true",
+        help="Replace only the visual placeholders on Slides 15–18.",
+    )
+    parser.add_argument(
+        "--refresh-slide-20",
+        action="store_true",
+        help="Replace only Slide 20 with its approved rewrite.",
+    )
     args = parser.parse_args()
 
     visual_1 = find_asset(args.visuals_dir, "Raycast_Slide_1_Visual.png")
@@ -2504,6 +2905,15 @@ def main():
     visual_12_01 = find_asset(args.visuals_dir, "Raycast_Slide_12_Visual_01.png")
     visual_12_02 = find_asset(args.visuals_dir, "Raycast_Slide_12_Visual_02.png")
     visual_14 = find_asset(args.visuals_dir, "Raycast_Slide_14_Visual.png")
+    visual_15 = find_asset(args.visuals_dir, "Raycast_Slide_15_Visual.png")
+    visual_16 = find_asset(args.visuals_dir, "Raycast_Slide_16_Visual.png")
+    video_17 = find_asset(args.visuals_dir, "Raycast_Slide_17_Visual.mp4")
+    poster_17 = find_asset(args.visuals_dir, "Raycast_Slide_17_Poster.jpg")
+    visual_18 = find_asset(args.visuals_dir, "Raycast_Slide_18_Visual.png")
+    visual_19 = find_asset(args.visuals_dir, "Raycast_Slide_19_Visual.png")
+    visual_20 = find_asset(args.visuals_dir, "Raycast_Slide_20_NEW_Visual.png")
+    visual_21 = find_asset(args.visuals_dir, "Raycast_Slide_21_Visual.png")
+    visual_23 = find_asset(args.visuals_dir, "Raycast_Slide_23_Visual.png")
     frame_ids = ("04709", "04752", "10671")
     app_cam_paths = tuple(
         find_asset(args.visuals_dir, f"app_cam_{frame_id}_in_blender.png")
@@ -2519,9 +2929,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():
         prs = Presentation(str(args.output))
-        if len(prs.slides) not in (3, 6, 11, 14):
+        if len(prs.slides) not in (3, 6, 11, 14, 18, 22):
             raise ValueError(
-                f"Expected 3, 6, 11, or 14 existing slides in {args.output}, "
+                f"Expected 3, 6, 11, 14, 18, or 22 existing slides in {args.output}, "
                 f"found {len(prs.slides)}."
             )
         starting_slide_count = len(prs.slides)
@@ -2549,6 +2959,44 @@ def main():
             visual_14,
         )
         prs.save(args.output)
+        print(args.output)
+        return
+
+    if args.refresh_slide_20:
+        refresh_slide_20(prs, visual_20)
+        prs.save(args.output)
+        print(args.output)
+        return
+
+    if args.refresh_slides_15_18:
+        refresh_slides_15_18(
+            prs, visual_15, visual_16, video_17, poster_17, visual_18
+        )
+        prs.save(args.output)
+        configure_slide17_video(args.output)
+        print(args.output)
+        return
+
+    if starting_slide_count == 14:
+        build_slide_15(prs, visual_15)
+        build_slide_16(prs, visual_16)
+        build_slide_17(prs, video_17, poster_17)
+        build_slide_18(prs, visual_18)
+        prs.save(args.output)
+        configure_slide17_video(args.output)
+        print(args.output)
+        return
+
+    if starting_slide_count == 18:
+        build_slide_19(prs, visual_19)
+        build_slide_20(prs, visual_20)
+        build_slide_21(prs, visual_21)
+        build_slide_23(prs, visual_23)
+        prs.save(args.output)
+        print(args.output)
+        return
+
+    if starting_slide_count == 22:
         print(args.output)
         return
 

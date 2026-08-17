@@ -211,13 +211,19 @@ Please see the acts we have, their names, and their "rail labels" in the followi
 **Visual:** Two small diagrams side by side: "old" = rigid scaffolding holding up a structure; "new" = a weighted-average cloud of soft springs pulling toward consensus. [NTPvChat]
 **Speaker notes:** This is the conceptual heart of the whole second half of the project — worth taking slow.
 
+## Slide 20 - NEW
+**Title:** Enter MASt3R
+**Body:** The old stack just couldn't crack it, and something smarter was needed. MASt3R's dense reconstruction could handle the low-texture, repetitive ground the old feature matchers choked on.
+**Visual:** Created.
+**Speaker notes:** Mention that this magic requires better hardware.
+
 ## Slide 21
 **Title:** Step Zero: Get a GPU
 **Body:** RunPod, chosen over Google Colab specifically because Colab's runtimes wipe on timeout — meaning MASt3R's CUDA/C++ kernels would need recompiling from scratch every session, versus RunPod's persistent volume storage compiling once and staying ready.
 **Visual:** A simple two-box comparison card, Colab vs. RunPod, with the "recompile every session" vs "compile once" distinction as the headline. [NTPvChat]
 **Speaker notes:** Frame this as an actual evaluated decision, not a default — it's easy to skip over infrastructure choices in a deck, don't.
 
-## Slide 22
+## Slide 22 -SKIP
 **Title:** GPU Sniping, Host Timeouts, and a Very Expensive `pip install`
 **Body:** Real friction, none of it in git: GPUs vanishing between page-load and click, host containers timing out mid-deploy, and — the costly one — dependencies installed onto the pod's *ephemeral* disk instead of the persistent volume, risking a repeat of a ~15-minute compile every single time the pod stopped. SSH + tmux, eventually, so a long-running session could survive a dropped connection instead of dying with it.
 **Visual:** A wry "container disk vs. volume disk" diagram — one drawn as a sandcastle at the tideline, one as a filing cabinet. [NTPvChat]
@@ -233,6 +239,10 @@ Please see the acts we have, their names, and their "rail labels" in the followi
 ---
 
 # Act V — How the New Brain Thinks
+
+## Slide 23.5
+**Title:** MASt3R's Achilles' heel
+**Body:** MASt3R has one weakness - it DRIFTS. We will use QWEN to find a joint anchor in the images, to prevent this.
 
 ## Slide 24
 **Title:** Qwen's Job: Find the One Thing Every Frame Shares
