@@ -4,8 +4,10 @@ import subprocess
 
 from pptx import Presentation
 from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_SHAPE
+from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.oxml import parse_xml
+from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
 
@@ -21,13 +23,14 @@ DEFAULT_SERIOUS_MASCOT_PATH = (
 ANIMATION_SCRIPT = SCRIPT_DIR / "apply_speech_animations.ps1"
 OUTPUT_PPTX = SCRIPT_DIR / "presentation.pptx"
 
-SPEECH_OVERLAY_SLIDES = (1, 4, 5, 10, 11)
+SPEECH_OVERLAY_SLIDES = (1, 4, 5, 10, 11, 14)
 SPEECH_TEXT_MARKERS = {
     1: "≤10 pixels",
     4: "First commit after",
     5: "You have no idea how important",
     10: "This exact commit also complains",
     11: "Yeah, so much effort",
+    14: "I know the guy",
 }
 MASCOT_X = 11.75
 MASCOT_Y = 5.85
@@ -1061,6 +1064,23 @@ def prepare_speech_overlays(prs, mascot_path, serious_mascot_path):
         )
         mascot.name = "Mascot"
 
+
+def bring_speech_overlays_to_front(prs):
+    """Keep animated mascot/callout groups above subsequently inserted visuals."""
+    for slide_number in SPEECH_OVERLAY_SLIDES:
+        if slide_number > len(prs.slides):
+            continue
+        slide = prs.slides[slide_number - 1]
+        overlay = next(
+            (shape for shape in slide.shapes if shape.name == "SpeechOverlay_Group"),
+            None,
+        )
+        if overlay is None:
+            continue
+        shape_tree = overlay._element.getparent()
+        shape_tree.remove(overlay._element)
+        shape_tree.append(overlay._element)
+
 def apply_speech_animations(presentation_path, serious_mascot_path):
     """Replace speech parts with native callouts and add Zoom entrances."""
     if not ANIMATION_SCRIPT.exists():
@@ -1088,7 +1108,35 @@ def apply_speech_animations(presentation_path, serious_mascot_path):
 
 
 def add_notes(slide, notes, source=None, visual_spec=None):
-    text_frame = slide.notes_slide.notes_text_frame
+    notes_slide = slide.notes_slide
+    text_frame = notes_slide.notes_text_frame
+    if text_frame is None:
+        # Decks that have passed through desktop PowerPoint can expose a notes
+        # master whose placeholders are not cloned onto newly appended slides.
+        # Clone the standard notes placeholders from an existing slide so the
+        # new slide receives a proper notes body without changing prior notes.
+        presentation = slide.part.package.presentation_part.presentation
+        template_notes = next(
+            (
+                existing_slide.notes_slide
+                for existing_slide in presentation.slides
+                if existing_slide is not slide
+                and existing_slide.notes_slide.notes_text_frame is not None
+            ),
+            None,
+        )
+        if template_notes is None:
+            raise ValueError("No existing notes placeholder is available to clone.")
+        for placeholder in template_notes.placeholders:
+            if placeholder.placeholder_format.type in (
+                PP_PLACEHOLDER.SLIDE_IMAGE,
+                PP_PLACEHOLDER.BODY,
+                PP_PLACEHOLDER.SLIDE_NUMBER,
+            ):
+                notes_slide.shapes.clone_placeholder(placeholder)
+        text_frame = notes_slide.notes_text_frame
+        if text_frame is None:
+            raise ValueError("Could not create the notes text placeholder.")
     text_frame.text = notes
     if visual_spec:
         paragraph = text_frame.add_paragraph()
@@ -1163,6 +1211,36 @@ def add_picture_contain(slide, image_path, x, y, w, h, dark=False):
     )
     picture._element.spPr.prstGeom.set("prst", "roundRect")
     return picture
+
+
+def add_movie_contain(
+    slide, movie_path, poster_path, x, y, w, h, shape_name, dark=False
+):
+    """Embed a movie without distorting its source aspect ratio."""
+    from PIL import Image
+
+    frame_fill = "182338" if dark else "E8EDF3"
+    frame_line = "516177" if dark else MUTED
+    add_rect(slide, x, y, w, h, frame_fill, frame_line, radius=True, line_width=1.2)
+
+    with Image.open(poster_path) as image:
+        image_w, image_h = image.size
+    scale = min((w - 0.12) / image_w, (h - 0.12) / image_h)
+    placed_w = image_w * scale
+    placed_h = image_h * scale
+    placed_x = x + (w - placed_w) / 2
+    placed_y = y + (h - placed_h) / 2
+    movie = slide.shapes.add_movie(
+        str(movie_path),
+        Inches(placed_x),
+        Inches(placed_y),
+        Inches(placed_w),
+        Inches(placed_h),
+        poster_frame_image=str(poster_path),
+        mime_type="video/mp4",
+    )
+    movie.name = shape_name
+    return movie
 
 
 def build_slide_1(prs, visual_1):
@@ -1443,6 +1521,51 @@ def replace_slide_visual(
     picture.name = shape_name
 
 
+def replace_slide_video(
+    prs,
+    slide_number,
+    movie_path,
+    poster_path,
+    x,
+    y,
+    w,
+    h,
+    shape_name,
+    dark=False,
+):
+    """Replace a slide visual placeholder with an embedded movie."""
+    slide = prs.slides[slide_number - 1]
+    if any(shape.name == shape_name for shape in slide.shapes):
+        return
+
+    left = Inches(x - 0.04)
+    top = Inches(y - 0.04)
+    right = Inches(x + w + 0.04)
+    bottom = Inches(y + h + 0.04)
+    placeholder_shapes = [
+        shape
+        for shape in slide.shapes
+        if shape.left >= left
+        and shape.top >= top
+        and shape.left + shape.width <= right
+        and shape.top + shape.height <= bottom
+    ]
+    for shape in placeholder_shapes:
+        shape._element.getparent().remove(shape._element)
+
+    add_movie_contain(
+        slide,
+        movie_path,
+        poster_path,
+        x,
+        y,
+        w,
+        h,
+        shape_name,
+        dark=dark,
+    )
+
+
 def build_slide_6(prs, visual_6):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, PRIMARY)
@@ -1624,10 +1747,22 @@ def add_slide_8_stage_card(slide, number, text, x, font_size):
     )
 
 
-def layout_slide_8(slide):
+def layout_slide_8(slide, video_path=None, poster_path=None):
     """Lay out Slide 8 around a central landscape video."""
     add_title(slide, "The Manual Correspondence Picker Is Born", font_size=35)
-    add_video_placeholder(slide, 3.70, 1.35, 7.25, 4.08)
+    if video_path is not None and poster_path is not None:
+        movie = slide.shapes.add_movie(
+            str(video_path),
+            Inches(3.70),
+            Inches(1.35),
+            Inches(7.25),
+            Inches(4.08),
+            poster_frame_image=str(poster_path),
+            mime_type="video/mp4",
+        )
+        movie.name = "Slide8_Video"
+    else:
+        add_video_placeholder(slide, 3.70, 1.35, 7.25, 4.08)
 
     items = [
         "Multi-frame grid, independent zoom/pan, adjustable marker size",
@@ -1654,7 +1789,7 @@ def layout_slide_8(slide):
         add_slide_8_stage_card(slide, index, text, x, font_size)
 
 
-def normalize_slide_8_layout(prs):
+def normalize_slide_8_layout(prs, video_path=None, poster_path=None):
     """Rebuild Slide 8's content area without disturbing its rail or notes."""
     if len(prs.slides) < 8:
         return
@@ -1665,13 +1800,232 @@ def normalize_slide_8_layout(prs):
     for shape in content_shapes:
         shape._element.getparent().remove(shape._element)
     set_background(slide, OFFWHITE)
-    layout_slide_8(slide)
+    layout_slide_8(slide, video_path, poster_path)
 
 
-def build_slide_8(prs):
+def configure_video_click_timing(
+    prs, slide_number, shape_name, duration_ms, followup_zoom_shape_name=None
+):
+    """Play an embedded video on the next click/spacebar press, full-screen."""
+    if len(prs.slides) < slide_number:
+        return
+    slide = prs.slides[slide_number - 1]
+    video = next((shape for shape in slide.shapes if shape.name == shape_name), None)
+    if video is None:
+        return
+
+    slide_element = slide._element
+    existing_timing = slide_element.find(qn("p:timing"))
+    if existing_timing is not None:
+        slide_element.remove(existing_timing)
+
+    shape_id = video.shape_id
+    followup_xml = ""
+    media_node_id = 7
+    if followup_zoom_shape_name is not None:
+        followup = next(
+            (
+                shape
+                for shape in slide.shapes
+                if shape.name == followup_zoom_shape_name
+            ),
+            None,
+        )
+        if followup is not None:
+            followup_id = followup.shape_id
+            media_node_id = 13
+            followup_xml = f"""
+                        <p:par>
+                          <p:cTn id="7" fill="hold">
+                            <p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>
+                            <p:childTnLst>
+                              <p:par>
+                                <p:cTn id="8" fill="hold">
+                                  <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                                  <p:childTnLst>
+                                    <p:par>
+                                      <p:cTn id="9" presetID="23" presetClass="entr" presetSubtype="16" accel="12000" decel="18000" fill="hold" nodeType="clickEffect">
+                                        <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                                        <p:childTnLst>
+                                          <p:set>
+                                            <p:cBhvr>
+                                              <p:cTn id="10" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>
+                                              <p:tgtEl><p:spTgt spid="{followup_id}"/></p:tgtEl>
+                                              <p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst>
+                                            </p:cBhvr>
+                                            <p:to><p:strVal val="visible"/></p:to>
+                                          </p:set>
+                                          <p:anim calcmode="lin" valueType="num">
+                                            <p:cBhvr>
+                                              <p:cTn id="11" dur="250" fill="hold"/>
+                                              <p:tgtEl><p:spTgt spid="{followup_id}"/></p:tgtEl>
+                                              <p:attrNameLst><p:attrName>ppt_w</p:attrName></p:attrNameLst>
+                                            </p:cBhvr>
+                                            <p:tavLst><p:tav tm="0"><p:val><p:fltVal val="0"/></p:val></p:tav><p:tav tm="100000"><p:val><p:strVal val="#ppt_w"/></p:val></p:tav></p:tavLst>
+                                          </p:anim>
+                                          <p:anim calcmode="lin" valueType="num">
+                                            <p:cBhvr>
+                                              <p:cTn id="12" dur="250" fill="hold"/>
+                                              <p:tgtEl><p:spTgt spid="{followup_id}"/></p:tgtEl>
+                                              <p:attrNameLst><p:attrName>ppt_h</p:attrName></p:attrNameLst>
+                                            </p:cBhvr>
+                                            <p:tavLst><p:tav tm="0"><p:val><p:fltVal val="0"/></p:val></p:tav><p:tav tm="100000"><p:val><p:strVal val="#ppt_h"/></p:val></p:tav></p:tavLst>
+                                          </p:anim>
+                                        </p:childTnLst>
+                                      </p:cTn>
+                                    </p:par>
+                                  </p:childTnLst>
+                                </p:cTn>
+                              </p:par>
+                            </p:childTnLst>
+                          </p:cTn>
+                        </p:par>
+            """
+    timing = parse_xml(
+        f"""
+        <p:timing xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:tnLst>
+            <p:par>
+              <p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot">
+                <p:childTnLst>
+                  <p:seq concurrent="1" nextAc="seek">
+                    <p:cTn id="2" dur="indefinite" nodeType="mainSeq">
+                      <p:childTnLst>
+                        <p:par>
+                          <p:cTn id="3" fill="hold">
+                            <p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>
+                            <p:childTnLst>
+                              <p:par>
+                                <p:cTn id="4" fill="hold">
+                                  <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                                  <p:childTnLst>
+                                    <p:par>
+                                      <p:cTn id="5" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="clickEffect">
+                                        <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                                        <p:childTnLst>
+                                          <p:cmd type="call" cmd="playFrom(0.0)">
+                                            <p:cBhvr>
+                                              <p:cTn id="6" dur="{duration_ms}" fill="hold"/>
+                                              <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                                            </p:cBhvr>
+                                          </p:cmd>
+                                        </p:childTnLst>
+                                      </p:cTn>
+                                    </p:par>
+                                  </p:childTnLst>
+                                </p:cTn>
+                              </p:par>
+                            </p:childTnLst>
+                          </p:cTn>
+                        </p:par>
+                        {followup_xml}
+                      </p:childTnLst>
+                    </p:cTn>
+                    <p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>
+                    <p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>
+                  </p:seq>
+                  <p:video fullScrn="true">
+                    <p:cMediaNode vol="80000">
+                      <p:cTn id="{media_node_id}" fill="hold" display="0">
+                        <p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>
+                      </p:cTn>
+                      <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                    </p:cMediaNode>
+                  </p:video>
+                </p:childTnLst>
+              </p:cTn>
+            </p:par>
+          </p:tnLst>
+        </p:timing>
+        """
+    )
+    slide_element.append(timing)
+
+
+def configure_speech_overlay_click_timing(prs, slide_number):
+    """Reveal all speech-overlay pieces together on one click without COM."""
+    if len(prs.slides) < slide_number:
+        return
+    slide = prs.slides[slide_number - 1]
+    overlay_names = (
+        "SpeechBubble_Background",
+        "SpeechBubble_Text",
+        "SpeechBubble_Tail",
+        "Mascot",
+    )
+    overlay_shapes = [
+        next((shape for shape in slide.shapes if shape.name == name), None)
+        for name in overlay_names
+    ]
+    overlay_shapes = [shape for shape in overlay_shapes if shape is not None]
+    if not overlay_shapes:
+        return
+
+    child_nodes = []
+    timing_id = 6
+    for shape in overlay_shapes:
+        shape_id = shape.shape_id
+        child_nodes.append(
+            f"""
+            <p:set>
+              <p:cBhvr>
+                <p:cTn id="{timing_id}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>
+                <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                <p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst>
+              </p:cBhvr>
+              <p:to><p:strVal val="visible"/></p:to>
+            </p:set>
+            <p:anim calcmode="lin" valueType="num">
+              <p:cBhvr>
+                <p:cTn id="{timing_id + 1}" dur="250" fill="hold"/>
+                <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                <p:attrNameLst><p:attrName>ppt_w</p:attrName></p:attrNameLst>
+              </p:cBhvr>
+              <p:tavLst><p:tav tm="0"><p:val><p:fltVal val="0"/></p:val></p:tav><p:tav tm="100000"><p:val><p:strVal val="#ppt_w"/></p:val></p:tav></p:tavLst>
+            </p:anim>
+            <p:anim calcmode="lin" valueType="num">
+              <p:cBhvr>
+                <p:cTn id="{timing_id + 2}" dur="250" fill="hold"/>
+                <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                <p:attrNameLst><p:attrName>ppt_h</p:attrName></p:attrNameLst>
+              </p:cBhvr>
+              <p:tavLst><p:tav tm="0"><p:val><p:fltVal val="0"/></p:val></p:tav><p:tav tm="100000"><p:val><p:strVal val="#ppt_h"/></p:val></p:tav></p:tavLst>
+            </p:anim>
+            """
+        )
+        timing_id += 3
+
+    slide_element = slide._element
+    existing_timing = slide_element.find(qn("p:timing"))
+    if existing_timing is not None:
+        slide_element.remove(existing_timing)
+    timing = parse_xml(
+        f"""
+        <p:timing xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>
+            <p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>
+              <p:par><p:cTn id="3" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>
+                <p:par><p:cTn id="4" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>
+                  <p:par><p:cTn id="5" presetID="23" presetClass="entr" presetSubtype="16" accel="12000" decel="18000" fill="hold" nodeType="clickEffect"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>
+                    {''.join(child_nodes)}
+                  </p:childTnLst></p:cTn></p:par>
+                </p:childTnLst></p:cTn></p:par>
+              </p:childTnLst></p:cTn></p:par>
+            </p:childTnLst></p:cTn>
+            <p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>
+            <p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>
+            </p:seq>
+          </p:childTnLst></p:cTn></p:par></p:tnLst>
+        </p:timing>
+        """
+    )
+    slide_element.append(timing)
+
+
+def build_slide_8(prs, video_path=None, poster_path=None):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, OFFWHITE)
-    layout_slide_8(slide)
+    layout_slide_8(slide, video_path, poster_path)
     add_act_ii_rail(slide, 8)
     add_notes(
         slide,
@@ -1681,7 +2035,7 @@ def build_slide_8(prs):
     )
 
 
-def build_slide_9(prs):
+def build_slide_9(prs, visual_9=None):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, PRIMARY)
     add_title(slide, "The Scorer: A Heads-Up, Not a Verdict", dark=True, font_size=36)
@@ -1717,9 +2071,15 @@ def build_slide_9(prs):
         'looking at the full frame — not just the crop — can tell them apart. '
         "[NTPvCode]"
     )
-    add_visual_placeholder(
-        slide, visual_spec, 6.54, 1.48, 6.26, 4.98, dark=True
-    )
+    if visual_9 is not None:
+        picture = add_picture_contain(
+            slide, visual_9, 6.54, 1.48, 6.26, 4.98, dark=True
+        )
+        picture.name = "Slide9_Visual"
+    else:
+        add_visual_placeholder(
+            slide, visual_spec, 6.54, 1.48, 6.26, 4.98, dark=True
+        )
     add_act_ii_rail(slide, 9)
     add_notes(
         slide,
@@ -1728,7 +2088,7 @@ def build_slide_9(prs):
     )
 
 
-def build_slide_10(prs):
+def build_slide_10(prs, visual_10=None, poster_10=None):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, OFFWHITE)
     add_title(
@@ -1739,9 +2099,22 @@ def build_slide_10(prs):
         "The best-looking proof-sheet reprojection from this era, one source pixel "
         "accurately landing across all 7 frames. [NTPvCode]"
     )
-    add_visual_placeholder(
-        slide, visual_spec, 1.75, 1.48, 6.18, 4.82, dark=False
-    )
+    if visual_10 is not None and poster_10 is not None:
+        add_movie_contain(
+            slide,
+            visual_10,
+            poster_10,
+            1.75,
+            1.48,
+            6.18,
+            4.82,
+            "Slide10_Video",
+            dark=False,
+        )
+    else:
+        add_visual_placeholder(
+            slide, visual_spec, 1.75, 1.48, 6.18, 4.82, dark=False
+        )
 
     body = (
         "Known van geometry (wheel axis, roof edges) as hard anchors + hand-picked "
@@ -1782,7 +2155,7 @@ def build_slide_10(prs):
     )
 
 
-def build_slide_11(prs):
+def build_slide_11(prs, visual_11=None):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     set_background(slide, PRIMARY)
     add_title(slide, "The Other Six", dark=True, font_size=40)
@@ -1813,9 +2186,15 @@ def build_slide_11(prs):
         'A simple diagram — 7 solid "trusted" nodes in the center, 6 dashed '
         '"extended" nodes reaching out from them. [NTPvChat]'
     )
-    add_visual_placeholder(
-        slide, visual_spec, 6.48, 1.48, 6.32, 4.82, dark=True
-    )
+    if visual_11 is not None:
+        picture = add_picture_contain(
+            slide, visual_11, 6.48, 1.48, 6.32, 4.82, dark=True
+        )
+        picture.name = "Slide11_Visual"
+    else:
+        add_visual_placeholder(
+            slide, visual_spec, 6.48, 1.48, 6.32, 4.82, dark=True
+        )
     add_act_ii_rail(slide, 11)
     add_speech_bubble(
         slide,
@@ -1833,6 +2212,222 @@ def build_slide_11(prs):
     )
 
 
+def build_slide_12(prs, visual_12_01=None, visual_12_02=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "The Mid-Way Report", dark=True, font_size=40)
+
+    body = (
+        'Built collaboratively over two late nights from ~19 screenshots: '
+        "executive summary → pipeline walkthrough → what's working → a Blender "
+        'comparison of solved vs. telemetry cameras ("how much the GPS is lying") '
+        "→ an honest weaknesses section → a forward plan."
+    )
+    add_rect(
+        slide, 1.75, 1.48, 4.42, 4.98, DEEP, "334155", radius=True, line_width=1.2
+    )
+    add_text(
+        slide,
+        body,
+        2.08,
+        1.83,
+        3.76,
+        4.25,
+        18.4,
+        OFFWHITE,
+        font=BODY_FONT,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    visual_spec = (
+        "A collage of 4–5 real screenshots from `report.html`/`img/` if they still "
+        "exist on disk, or the Blender camera-comparison shot specifically — it's "
+        "the most visually striking one. [NTPvCode]"
+    )
+    if visual_12_01 is not None:
+        main_visual = add_rounded_picture_cover(
+            slide, visual_12_01, 6.45, 1.48, 6.35, 4.98, line_color="516177"
+        )
+        main_visual.name = "Slide12_Report_Visual"
+        if visual_12_02 is not None:
+            add_rect(
+                slide, 9.54, 4.25, 3.02, 1.94, DEEP, WHITE,
+                radius=True, line_width=1.6,
+            )
+            inset = add_picture_cover(slide, visual_12_02, 9.62, 4.33, 2.86, 1.78)
+            inset._element.spPr.prstGeom.set("prst", "roundRect")
+            inset.name = "Slide12_Blender_Inset"
+    else:
+        add_visual_placeholder(
+            slide, visual_spec, 6.45, 1.48, 6.35, 4.98, dark=True
+        )
+    add_inline_act_rail(slide, 12)
+    add_notes(
+        slide,
+        "This is a good \"behind the curtain\" slide — a real deliverable, not just code, and it forces honesty about what wasn't working yet.",
+        visual_spec=visual_spec,
+    )
+
+
+def layout_slide_13(slide, app_cam_paths=None, rigged_cam_paths=None):
+    set_background(slide, OFFWHITE)
+    add_title(slide, "The Honest Weakness", font_size=40)
+
+    body = "Validating in Blender had shown that there is still a pitch problem with the solved cameras."
+    add_rect(slide, 1.75, 1.25, 11.05, 0.68, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.05, 1.38, 10.45, 0.42, 16.2, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    add_text(
+        slide, "SOLVED CAMERAS — PITCH ERROR", 1.75, 2.05, 11.05, 0.24,
+        12.2, ACCENT, font=HEADER_FONT, bold=True,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    add_text(
+        slide, "AFTER SLIGHT PITCH ADJUSTMENT — ALIGNED",
+        1.75, 4.30, 11.05, 0.24, 12.2, SECONDARY,
+        font=HEADER_FONT, bold=True, valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    frame_ids = ("04709", "04752", "10671")
+    xs = (1.75, 5.51, 9.27)
+    rows = (
+        (app_cam_paths or (None, None, None), 2.36, ACCENT, "App"),
+        (rigged_cam_paths or (None, None, None), 4.61, SECONDARY, "Rigged"),
+    )
+    for paths, y, color, prefix in rows:
+        for frame_id, x, image_path in zip(frame_ids, xs, paths):
+            if image_path is not None:
+                picture = add_rounded_picture_cover(
+                    slide, image_path, x, y, 3.53, 1.75,
+                    line_color=color, line_width=1.4,
+                )
+                picture.name = f"Slide13_{prefix}_{frame_id}"
+            else:
+                add_visual_placeholder(
+                    slide, f"{prefix.lower()}_cam_{frame_id}_in_blender.png",
+                    x, y, 3.53, 1.75, dark=False,
+                )
+            add_text(
+                slide, frame_id.lstrip("0"), x + 0.10, y + 0.08,
+                0.68, 0.24, 10.0, WHITE, font=HEADER_FONT,
+                bold=True, valign=MSO_ANCHOR.MIDDLE,
+            )
+
+
+def build_slide_13(prs, app_cam_paths=None, rigged_cam_paths=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    layout_slide_13(slide, app_cam_paths, rigged_cam_paths)
+    add_inline_act_rail(slide, 13)
+    add_notes(
+        slide,
+        "Even though the raycasting in the app seemed good enough, validation in Blender showed that something still wasn't solving correctly.",
+    )
+
+
+def build_slide_14(prs, visual_14=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, '"The Rabbit Hole in the Rabbit Hole"', dark=True, font_size=36)
+
+    body = (
+        "The mid-way report wasn't just a status update — it was built to ask a "
+        "real question of the reviewing team: hit a wall with the 6 hard frames, "
+        "considering two very different moves — upgrade the feature matcher "
+        "(LoFTR/RoMa), or go build a synthetic-data YOLO skeleton network to "
+        "precisely locate van joints. Which one, or neither?"
+    )
+    add_rect(
+        slide, 1.75, 1.48, 5.02, 4.98, DEEP, "334155", radius=True, line_width=1.2
+    )
+    add_text(
+        slide,
+        body,
+        2.07,
+        1.78,
+        4.38,
+        4.32,
+        17.2,
+        OFFWHITE,
+        font=BODY_FONT,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    visual_spec = '"The Rabbit Hole in the Rabbit Hole" [NTPvChat]'
+    if visual_14 is not None:
+        picture = add_rounded_picture_cover(
+            slide, visual_14, 7.04, 1.48, 5.76, 4.98, line_color="516177"
+        )
+        picture.name = "Slide14_RabbitHole_Visual"
+    else:
+        add_visual_placeholder(
+            slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=True
+        )
+    add_inline_act_rail(slide, 14)
+    add_speech_bubble(
+        slide,
+        '"I know the guy - without guidance he\'d go train a YOLO8 network. Good thing he knows himself as well."',
+        6.94,
+        6.12,
+        5.80,
+        0.94,
+        font_size=11.8,
+    )
+    add_notes(
+        slide,
+        "No punchline here — play this one straight. The next slide is the answer, and it lands harder if this one isn't already winking at the audience.",
+        visual_spec=visual_spec,
+    )
+
+
+def refresh_act_iii(prs, visual_12_01, visual_12_02, app_cam_paths, rigged_cam_paths, visual_14):
+    """Refresh Slides 12–14 without touching any earlier slide."""
+    if len(prs.slides) != 14:
+        raise ValueError(f"Expected 14 slides, found {len(prs.slides)}.")
+
+    slide_12 = prs.slides[11]
+    for shape in list(slide_12.shapes):
+        if shape.left >= Inches(6.35) and Inches(1.30) <= shape.top < Inches(6.60):
+            shape._element.getparent().remove(shape._element)
+    main_visual = add_rounded_picture_cover(
+        slide_12, visual_12_01, 6.45, 1.48, 6.35, 4.98, line_color="516177"
+    )
+    main_visual.name = "Slide12_Report_Visual"
+    add_rect(
+        slide_12, 9.54, 4.25, 3.02, 1.94, DEEP, WHITE,
+        radius=True, line_width=1.6,
+    )
+    inset = add_picture_cover(slide_12, visual_12_02, 9.62, 4.33, 2.86, 1.78)
+    inset._element.spPr.prstGeom.set("prst", "roundRect")
+    inset.name = "Slide12_Blender_Inset"
+
+    slide_13 = prs.slides[12]
+    for shape in list(slide_13.shapes):
+        if shape.left >= Inches(1.43):
+            shape._element.getparent().remove(shape._element)
+    layout_slide_13(slide_13, app_cam_paths, rigged_cam_paths)
+    add_notes(
+        slide_13,
+        "Even though the raycasting in the app seemed good enough, validation in Blender showed that something still wasn't solving correctly.",
+    )
+
+    slide_14 = prs.slides[13]
+    for shape in list(slide_14.shapes):
+        if (
+            shape.name != "SpeechOverlay_Group"
+            and shape.left >= Inches(6.80)
+            and Inches(1.30) <= shape.top < Inches(6.60)
+        ):
+            shape._element.getparent().remove(shape._element)
+    rabbit = add_rounded_picture_cover(
+        slide_14, visual_14, 7.04, 1.48, 5.76, 4.98, line_color="516177"
+    )
+    rabbit.name = "Slide14_RabbitHole_Visual"
+    bring_speech_overlays_to_front(prs)
+
+
 def normalize_slide_10_title(prs):
     """Keep the long Slide 10 title clear of the accent rule in existing decks."""
     if len(prs.slides) < 10:
@@ -1848,7 +2443,7 @@ def normalize_slide_10_title(prs):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build the Raycast Challenge deck through Act II."
+        description="Build the Raycast Challenge deck through Act III, Slide 14."
     )
     parser.add_argument(
         "--visuals-dir",
@@ -1885,6 +2480,11 @@ def main():
         action="store_true",
         help="Save without applying PowerPoint entrance animations.",
     )
+    parser.add_argument(
+        "--refresh-act-iii",
+        action="store_true",
+        help="Refresh only Slides 12–14 in an existing 14-slide deck.",
+    )
     args = parser.parse_args()
 
     visual_1 = find_asset(args.visuals_dir, "Raycast_Slide_1_Visual.png")
@@ -1893,19 +2493,41 @@ def main():
     visual_5 = find_asset(args.visuals_dir, "Raycast_Slide_5_Visual.png")
     visual_6 = find_asset(args.visuals_dir, "Raycast_Slide_6_Visual.png")
     visual_7 = find_asset(args.visuals_dir, "Raycast_Slide_7_Visual.png")
+    visual_8 = find_asset(args.visuals_dir, "Raycast_Slide_8_Visual_H264_4K.mp4")
+    poster_8 = find_asset(args.visuals_dir, "Raycast_Slide_8_Poster.jpg")
+    visual_9 = find_asset(args.visuals_dir, "Raycast_Slide_9_Visual.png")
+    visual_10 = find_asset(
+        args.visuals_dir, "Raycast_Slide_10_Visual_H264_4K.mp4"
+    )
+    poster_10 = find_asset(args.visuals_dir, "Raycast_Slide_10_Poster.jpg")
+    visual_11 = find_asset(args.visuals_dir, "Raycast_Slide_11_Visual.png")
+    visual_12_01 = find_asset(args.visuals_dir, "Raycast_Slide_12_Visual_01.png")
+    visual_12_02 = find_asset(args.visuals_dir, "Raycast_Slide_12_Visual_02.png")
+    visual_14 = find_asset(args.visuals_dir, "Raycast_Slide_14_Visual.png")
+    frame_ids = ("04709", "04752", "10671")
+    app_cam_paths = tuple(
+        find_asset(args.visuals_dir, f"app_cam_{frame_id}_in_blender.png")
+        for frame_id in frame_ids
+    )
+    rigged_cam_paths = tuple(
+        find_asset(args.visuals_dir, f"rigged_cam_{frame_id}_in_blender.png")
+        for frame_id in frame_ids
+    )
     sharp_frame = find_asset(args.dataset_dir, "2026-02-15_16-25-03_12035.png")
     blurred_frame = find_asset(args.dataset_dir, "2026-02-15_16-25-03_04681.png")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():
         prs = Presentation(str(args.output))
-        if len(prs.slides) not in (3, 6, 11):
+        if len(prs.slides) not in (3, 6, 11, 14):
             raise ValueError(
-                f"Expected 3, 6, or 11 existing slides in {args.output}, "
+                f"Expected 3, 6, 11, or 14 existing slides in {args.output}, "
                 f"found {len(prs.slides)}."
             )
+        starting_slide_count = len(prs.slides)
     else:
         prs = Presentation()
+        starting_slide_count = 0
         prs.slide_width = Inches(SLIDE_W)
         prs.slide_height = Inches(SLIDE_H)
         prs.core_properties.title = "The Raycast Challenge — Acts 0 through II"
@@ -1917,6 +2539,32 @@ def main():
         build_slide_2(prs, visual_2)
         build_slide_3(prs, sharp_frame, blurred_frame)
 
+    if args.refresh_act_iii:
+        refresh_act_iii(
+            prs,
+            visual_12_01,
+            visual_12_02,
+            app_cam_paths,
+            rigged_cam_paths,
+            visual_14,
+        )
+        prs.save(args.output)
+        print(args.output)
+        return
+
+    # Act III is appended non-destructively to the current 11-slide deck. Do
+    # not run any of the legacy normalization/replacement passes against Acts
+    # 0-II; they already contain approved media, layout, and click timing.
+    if starting_slide_count == 11:
+        build_slide_12(prs, visual_12_01, visual_12_02)
+        build_slide_13(prs, app_cam_paths, rigged_cam_paths)
+        build_slide_14(prs, visual_14)
+        prepare_speech_overlays(prs, args.mascot, args.serious_mascot)
+        configure_speech_overlay_click_timing(prs, 14)
+        prs.save(args.output)
+        print(args.output)
+        return
+
     if len(prs.slides) == 3:
         build_slide_4(prs, visual_4)
         build_slide_5(prs, visual_5)
@@ -1926,10 +2574,15 @@ def main():
 
     if len(prs.slides) == 6:
         build_slide_7(prs, visual_7)
-        build_slide_8(prs)
-        build_slide_9(prs)
-        build_slide_10(prs)
-        build_slide_11(prs)
+        build_slide_8(prs, visual_8, poster_8)
+        build_slide_9(prs, visual_9)
+        build_slide_10(prs, visual_10, poster_10)
+        build_slide_11(prs, visual_11)
+
+    if len(prs.slides) == 11:
+        build_slide_12(prs)
+        build_slide_13(prs)
+        build_slide_14(prs)
 
     replace_slide_visual(
         prs, 6, visual_6, 6.50, 1.48, 6.30, 4.98, "Slide6_Visual", dark=True
@@ -1937,10 +2590,37 @@ def main():
     replace_slide_visual(
         prs, 7, visual_7, 6.48, 1.48, 6.32, 4.98, "Slide7_Visual", dark=True
     )
-    normalize_slide_8_layout(prs)
+    replace_slide_visual(
+        prs, 9, visual_9, 6.54, 1.48, 6.26, 4.98, "Slide9_Visual", dark=True
+    )
+    replace_slide_video(
+        prs,
+        10,
+        visual_10,
+        poster_10,
+        1.75,
+        1.48,
+        6.18,
+        4.82,
+        "Slide10_Video",
+        dark=False,
+    )
+    replace_slide_visual(
+        prs, 11, visual_11, 6.48, 1.48, 6.32, 4.82, "Slide11_Visual", dark=True
+    )
+    normalize_slide_8_layout(prs, visual_8, poster_8)
+    configure_video_click_timing(prs, 8, "Slide8_Video", 195566)
+    configure_video_click_timing(
+        prs,
+        10,
+        "Slide10_Video",
+        72233,
+        followup_zoom_shape_name="SpeechOverlay_Group",
+    )
     normalize_slide_10_title(prs)
     normalize_all_act_rails(prs)
     prepare_speech_overlays(prs, args.mascot, args.serious_mascot)
+    bring_speech_overlays_to_front(prs)
     prs.save(args.output)
     if not args.skip_animations:
         apply_speech_animations(args.output, args.serious_mascot)
