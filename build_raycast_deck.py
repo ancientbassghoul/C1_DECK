@@ -80,9 +80,8 @@ ACT_LABELS = [
     "Pivot",
     "New Brain",
     "Bug Hunt",
-    "Silent Bugs",
     "Tuning",
-    "Twist",
+    "Hunger",
     "Landing",
 ]
 
@@ -122,35 +121,28 @@ ACT_SPECS = [
         "label": "Bug Hunt",
         "header": "THE BUG HUNT",
         "start": 26,
-        "end": 29,
+        "end": 28,
     },
     {
         "number": "VII",
-        "label": "Silent Bugs",
-        "header": "SILENT FAILURES",
-        "start": 30,
+        "label": "Tuning",
+        "header": "TUNING THE\nMACHINE",
+        "start": 29,
         "end": 32,
     },
     {
         "number": "VIII",
-        "label": "Tuning",
-        "header": "TUNING THE\nMACHINE",
+        "label": "Hunger",
+        "header": "THE HUNGER",
         "start": 33,
-        "end": 36,
+        "end": 33,
     },
     {
         "number": "IX",
-        "label": "Twist",
-        "header": "THE TWIST",
-        "start": 37,
-        "end": 38,
-    },
-    {
-        "number": "X",
         "label": "Landing",
         "header": "WHERE IT LANDED",
-        "start": 39,
-        "end": 40,
+        "start": 34,
+        "end": 35,
     },
 ]
 
@@ -618,7 +610,7 @@ def get_act_spec(slide_number):
     for act_index, spec in enumerate(ACT_SPECS):
         if spec["start"] <= slide_number <= spec["end"]:
             return act_index, spec
-    raise ValueError(f"Slide {slide_number} is outside the configured 40-slide deck.")
+    raise ValueError(f"Slide {slide_number} is outside the configured 35-slide deck.")
 
 
 def add_inline_act_rail(slide, current_slide, station_slides=None):
@@ -779,7 +771,7 @@ def add_inline_act_rail(slide, current_slide, station_slides=None):
 def normalize_all_act_rails(prs):
     """Replace legacy top-pinned rails while preserving all non-rail slide content."""
     rail_right = Inches(1.43)
-    for slide_number, slide in enumerate(prs.slides, start=1):
+    for physical_slide_number, slide in enumerate(prs.slides, start=1):
         rail_shapes = [
             shape
             for shape in slide.shapes
@@ -787,7 +779,21 @@ def normalize_all_act_rails(prs):
         ]
         for shape in rail_shapes:
             shape._element.getparent().remove(shape._element)
-        add_inline_act_rail(slide, slide_number)
+        if physical_slide_number == 22:
+            conceptual_slide_number = 23
+        elif physical_slide_number == 23:
+            conceptual_slide_number = 23.5
+        else:
+            conceptual_slide_number = physical_slide_number
+        if conceptual_slide_number in ACT_IV_STATIONS:
+            station_slides = ACT_IV_STATIONS
+        elif conceptual_slide_number in ACT_V_STATIONS:
+            station_slides = ACT_V_STATIONS
+        else:
+            station_slides = None
+        add_inline_act_rail(
+            slide, conceptual_slide_number, station_slides=station_slides
+        )
 
 
 def add_body_card(slide, number, text, x, y, w, h, dark=False, font_size=15.0):
@@ -2036,6 +2042,104 @@ def configure_video_click_timing(
     slide_element.append(timing)
 
 
+def configure_video_autoplay_loop_timing(prs, slide_number, shape_name):
+    """Start a video with its slide and loop it indefinitely."""
+    if len(prs.slides) < slide_number:
+        return
+    slide = prs.slides[slide_number - 1]
+    video = next((shape for shape in slide.shapes if shape.name == shape_name), None)
+    if video is None:
+        raise ValueError(f"Could not find {shape_name!r} on Slide {slide_number}.")
+
+    slide_element = slide._element
+    existing_timing = slide_element.find(qn("p:timing"))
+    if existing_timing is not None:
+        slide_element.remove(existing_timing)
+    shape_id = video.shape_id
+    timing = parse_xml(
+        f"""
+        <p:timing xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+          <p:tnLst>
+            <p:par>
+              <p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot">
+                <p:childTnLst>
+                  <p:seq concurrent="1" nextAc="seek">
+                    <p:cTn id="2" dur="indefinite" nodeType="mainSeq">
+                      <p:childTnLst>
+                        <p:par>
+                          <p:cTn id="3" fill="hold">
+                            <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                            <p:childTnLst>
+                              <p:par>
+                                <p:cTn id="4" fill="hold">
+                                  <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                                  <p:childTnLst>
+                                    <p:par>
+                                      <p:cTn id="5" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="withEffect">
+                                        <p:stCondLst><p:cond delay="0"/></p:stCondLst>
+                                        <p:childTnLst>
+                                          <p:cmd type="call" cmd="playFrom(0.0)">
+                                            <p:cBhvr>
+                                              <p:cTn id="6" dur="1" fill="hold"/>
+                                              <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                                            </p:cBhvr>
+                                          </p:cmd>
+                                        </p:childTnLst>
+                                      </p:cTn>
+                                    </p:par>
+                                  </p:childTnLst>
+                                </p:cTn>
+                              </p:par>
+                            </p:childTnLst>
+                          </p:cTn>
+                        </p:par>
+                      </p:childTnLst>
+                    </p:cTn>
+                    <p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>
+                    <p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst>
+                  </p:seq>
+                  <p:video>
+                    <p:cMediaNode vol="80000">
+                      <p:cTn id="7" repeatCount="indefinite" fill="remove" display="0">
+                        <p:stCondLst><p:cond delay="indefinite"/></p:stCondLst>
+                      </p:cTn>
+                      <p:tgtEl><p:spTgt spid="{shape_id}"/></p:tgtEl>
+                    </p:cMediaNode>
+                  </p:video>
+                </p:childTnLst>
+              </p:cTn>
+            </p:par>
+          </p:tnLst>
+        </p:timing>
+        """
+    )
+    slide_element.append(timing)
+
+
+def externalize_linked_video(presentation_path, slide_number, video_path):
+    """Replace one embedded movie payload with a local external file link."""
+    from externalize_pptx_videos import externalize_slide_video
+
+    presentation_path = Path(presentation_path).resolve()
+    video_path = Path(video_path).resolve()
+    temporary_path = presentation_path.with_suffix(".external-video.tmp.pptx")
+    with ZipFile(presentation_path, "r") as source:
+        infos = source.infolist()
+        entries = {info.filename: source.read(info.filename) for info in infos}
+    removed_media = externalize_slide_video(entries, slide_number, video_path)
+    if not removed_media:
+        raise ValueError(f"No embedded video found on Slide {slide_number}.")
+    with ZipFile(temporary_path, "w", allowZip64=True) as target:
+        for info in infos:
+            if info.filename in removed_media:
+                continue
+            target.writestr(info, entries[info.filename])
+    os.replace(temporary_path, presentation_path)
+    print(
+        f"Slide {slide_number} video linked externally to {video_path}."
+    )
+
+
 def group_speech_overlay_with_mascot_pivot(slide, visible_shapes):
     """Group a speech overlay around an invisible mascot-centered pivot frame."""
     visible_shapes = list(visible_shapes)
@@ -3006,6 +3110,113 @@ def refresh_slide_25_callout(prs, mascot_path):
     configure_speech_overlay_click_timing(prs, 25)
 
 
+def build_slide_26(prs, visual_26=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "New Engines - New Bugs", dark=True, font_size=40)
+
+    items = (
+        "Wrong CDN paths (MASt3R's weights aren't available on Hugging Face, so had to be downloaded from Naver's CDN)",
+        "Trying to read 'dust3r' attributes in 'MASt3R' class",
+        "'CLIP_ANCHOR_THRESHOLD' too high (QWEN)",
+        "Wrong coordinate systems for QWEN (mentioned in previous slide), and for MASt3R's camera solve.",
+    )
+    slots = (
+        (1.75, 1.48),
+        (4.35, 1.48),
+        (1.75, 3.98),
+        (4.35, 3.98),
+    )
+    for index, (text, (x, y)) in enumerate(zip(items, slots), start=1):
+        item_font_size = 10.8 if index == 3 else 12.2
+        add_rect(slide, x, y, 2.42, 2.30, DEEP, ACCENT, radius=True, line_width=1.1)
+        add_text(
+            slide, f"{index:02d}", x + 0.17, y + 0.14, 0.38, 0.24,
+            10, ACCENT, font=HEADER_FONT, bold=True,
+            valign=MSO_ANCHOR.MIDDLE,
+        )
+        add_text(
+            slide, text, x + 0.17, y + 0.48, 2.08, 1.61,
+            item_font_size, OFFWHITE, font=BODY_FONT,
+            valign=MSO_ANCHOR.MIDDLE,
+        )
+
+    if visual_26 is not None:
+        picture = add_picture_contain(slide, visual_26, 7.04, 1.48, 5.76, 4.98, dark=True)
+        picture.name = "Slide26_Visual"
+    else:
+        add_visual_placeholder(slide, "", 7.04, 1.48, 5.76, 4.98, dark=True)
+    add_inline_act_rail(slide, 26)
+    add_notes(slide, "")
+
+
+def build_slide_27(prs, visual_27=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "QWEN isn't a Psychic", font_size=40)
+
+    body = (
+        "In order for MASt3R to give best results we had to make sure the frames are clean of overlay graphics. The last piece of overlay graphics we needed to take care of, was the moving crosshair. We wanted to use QWEN for that, but had to describe the crosshair better:\n"
+        'Rather than: "a crosshair symbol", "+" or "⊕ symbol"\n'
+        'When used: "a small ring of four chevron marks around a center dot" QWEN found it and we blurred it out.'
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.70, 4.38, 4.52, 15.0, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'Side-by-side: what was described (a big fat "+") vs. what\'s actually on screen (the chevron-ring reticle), with the wrong guessed location circled. [NTPvChat]'
+    )
+    if visual_27 is not None:
+        picture = add_picture_contain(slide, visual_27, 7.04, 1.48, 5.76, 4.98, dark=False)
+        picture.name = "Slide27_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=False)
+    add_inline_act_rail(slide, 27)
+    add_notes(slide, "", visual_spec=visual_spec)
+
+
+def build_slide_28(prs, video_28=None, poster_28=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_text(
+        slide, "--export-mesh", 1.75, 0.36, 4.05, 0.62, 36, WHITE,
+        font="Cascadia Mono", bold=True, valign=MSO_ANCHOR.MIDDLE,
+    )
+    add_text(
+        slide, ": Actually Looking", 5.54, 0.36, 5.94, 0.62, 36, WHITE,
+        font=HEADER_FONT, bold=True, valign=MSO_ANCHOR.MIDDLE,
+    )
+    accent = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(1.75), Inches(1.10), Inches(0.78), Inches(0.055)
+    )
+    accent.fill.solid()
+    accent.fill.fore_color.rgb = rgb(SECONDARY)
+    accent.line.fill.background()
+
+    body = (
+        "Even after cleaning the input frames perfectly, the reconstruction wasn't good. So it was time to see things with our eyes: a debug tool that dumps the raw MASt3R reconstruction + solved cameras (and, once solved, the Ceres-refined + Sim(3)-aligned version) as real .glb scenes, importable straight into Blender."
+    )
+    add_rect(slide, 1.75, 1.48, 5.02, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.07, 1.72, 4.38, 4.50, 16.0, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        "A real Blender screenshot of the point cloud + camera cards, if available; otherwise a simple render mockup of scattered 3D points with camera frustums. [NTPvCode]"
+    )
+    if video_28 is not None and poster_28 is not None:
+        add_movie_contain(
+            slide, video_28, poster_28, 7.04, 1.48, 5.76, 4.98,
+            "Slide28_Video", dark=True,
+        )
+    else:
+        add_visual_placeholder(slide, visual_spec, 7.04, 1.48, 5.76, 4.98, dark=True)
+    add_inline_act_rail(slide, 28)
+    add_notes(slide, "", visual_spec=visual_spec)
+
+
 def refresh_slides_15_18(prs, visual_15, visual_16, video_17, poster_17, visual_18):
     """Replace Slides 15–18 visual placeholders without changing their text."""
     if len(prs.slides) != 18:
@@ -3050,7 +3261,7 @@ def normalize_slide_10_title(prs):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build the Raycast Challenge deck through Act V, skipping Slide 22."
+        description="Build the Raycast Challenge deck through Act VI, skipping Slide 22."
     )
     parser.add_argument(
         "--visuals-dir",
@@ -3137,6 +3348,10 @@ def main():
     visual_23 = find_asset(args.visuals_dir, "Raycast_Slide_23_Visual.png")
     visual_23_5 = find_asset(args.visuals_dir, "Raycast_Slide_23.5_Visual.png")
     visual_24 = find_asset(args.visuals_dir, "Raycast_Slide_24_Visual.png")
+    visual_26 = find_asset(args.visuals_dir, "Raycast_Slide_26_Visual.png")
+    visual_27 = find_asset(args.visuals_dir, "Raycast_Slide_27_Visual.png")
+    video_28 = find_asset(args.visuals_dir, "Raycast_Slide_28_Visual.mp4")
+    poster_28 = find_asset(args.visuals_dir, "Raycast_Slide_28_Poster.jpg")
     anchor_dir = args.visuals_dir / "anchor"
     anchor_images = tuple(
         find_asset(anchor_dir, filename)
@@ -3162,9 +3377,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():
         prs = Presentation(str(args.output))
-        if len(prs.slides) not in (3, 6, 11, 14, 18, 22, 25):
+        if len(prs.slides) not in (3, 6, 11, 14, 18, 22, 25, 28):
             raise ValueError(
-                f"Expected 3, 6, 11, 14, 18, 22, or 25 existing slides in {args.output}, "
+                f"Expected 3, 6, 11, 14, 18, 22, 25, or 28 existing slides in {args.output}, "
                 f"found {len(prs.slides)}."
             )
         starting_slide_count = len(prs.slides)
@@ -3244,6 +3459,18 @@ def main():
         return
 
     if starting_slide_count == 25:
+        build_slide_26(prs, visual_26)
+        build_slide_27(prs, visual_27)
+        build_slide_28(prs, video_28, poster_28)
+        normalize_all_act_rails(prs)
+        bring_speech_overlays_to_front(prs)
+        configure_video_autoplay_loop_timing(prs, 28, "Slide28_Video")
+        prs.save(args.output)
+        externalize_linked_video(args.output, 28, video_28)
+        print(args.output)
+        return
+
+    if starting_slide_count == 28:
         print(args.output)
         return
 

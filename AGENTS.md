@@ -1,4 +1,4 @@
-# We are building a 40 slides deck.
+# We are building a 35 slides deck.
 
 # This is the design system:
 
@@ -14,11 +14,10 @@ The deck is an engineering war story with eleven acts:
 | III — Asking for Directions  |  12–18 | Pause, report honestly, seek guidance, and reject an attractive diversion      |
 | IV — Starting Over           |  19–23 | Perform the architectural rewrite and establish cloud/local development        |
 | V — How the New Brain Thinks |  24–25 | Explain the new open-world anchor-discovery pipeline                           |
-| VI — The Bug Hunt            |  26–29 | Reveal model-integration and dataset-calibration failures                      |
-| VII — Silent Failures        |  30–32 | Expose bugs that produced plausible but incorrect output                       |
-| VIII — Tuning the Machine    |  33–36 | Replace brittle thresholds and assumptions with adaptive, observable methods   |
-| IX — The Twist               |  37–38 | Sound reasoning produces worse empirical results                               |
-| X — Where It Landed          |  39–40 | Present the autonomous final pipeline and working outcome                      |
+| VI — The Bug Hunt            |  26–28 | Reveal model-integration and dataset-calibration failures                      |
+| VII — Tuning the Machine     |  29–32 | Replace brittle thresholds and assumptions with adaptive, observable methods   |
+| VIII — The Hunger            |     33 | Show the reconstruction pipeline's resource demands                            |
+| IX — Where It Landed         |  34–35 | Present the autonomous final pipeline and working outcome                      |
 
 The narrative progression is:
 
@@ -106,7 +105,7 @@ Code excerpts, charts, and number lines use the **Cinematic Evidence** format: o
 
 The left rail remains visible throughout:
 
-* All eleven rail labels are always present.
+* All ten rail labels are always present.
 * Only the current act displays its slide-station dots.
 * The current station uses Target Green.
 * Completed stations are solid but muted.
@@ -134,8 +133,8 @@ This Design System is confirmed as the visual contract for the deck.
 3. PRESERVE ALL ASSETS: Verify that all previously inserted images (e.g., `slide_01_hero.png`) remain untouched in their respective slides before saving the updated `.pptx` file.
 
 # STRICT EXECUTION REQUIREMENT: You are a Python pptx builder.
-Your blueprint for the deck is raycast_challenge_deck_for_generator.md
-Do NOT summarize, rephrase, omit, merge, or shorten ANY text from the raycast_challenge_deck_for_generator.md file. 
+Your blueprint for the deck is raycast_challenge_deck_for_generator_v2.md
+Do NOT summarize, rephrase, omit, merge, or shorten ANY text from the raycast_challenge_deck_for_generator_v2.md file.
 The text is ALREADY slide-ready.
 
 KEEP THESE RULS AT ALL TIMES:
