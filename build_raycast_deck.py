@@ -26,7 +26,7 @@ DEFAULT_SERIOUS_MASCOT_PATH = (
 ANIMATION_SCRIPT = SCRIPT_DIR / "apply_speech_animations.ps1"
 OUTPUT_PPTX = SCRIPT_DIR / "presentation.pptx"
 
-SPEECH_OVERLAY_SLIDES = (1, 4, 5, 10, 11, 14, 25)
+SPEECH_OVERLAY_SLIDES = (1, 4, 5, 10, 11, 14, 25, 29)
 SPEECH_TEXT_MARKERS = {
     1: "≤10 pixels",
     4: "First commit after",
@@ -35,6 +35,7 @@ SPEECH_TEXT_MARKERS = {
     11: "Yeah, so much effort",
     14: "I know the guy",
     25: "...and to presuade Claude",
+    29: "Nice fix. Don't get comfortable",
 }
 MASCOT_X = 11.75
 MASCOT_Y = 5.85
@@ -3217,6 +3218,272 @@ def build_slide_28(prs, video_28=None, poster_28=None):
     add_notes(slide, "", visual_spec=visual_spec)
 
 
+def build_slide_29(prs, visual_29_01=None, visual_29_02=None, mascot_path=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Attention Magnets", dark=True, font_size=40)
+
+    body = (
+        "Hard black HUD fills acted as infinite-contrast \"attention magnets\" for MASt3R's vision transformer, warping its initial pose estimates. Fixed with a feathered gray fill — Gaussian-blurred, no hard edge."
+    )
+    add_rect(slide, 1.75, 1.42, 11.05, 1.14, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.04, 1.60, 10.47, 0.76, 16.2, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    comparison = (
+        ("HARD BLACK FILL", visual_29_01, 1.75, ACCENT, "Slide29_Before"),
+        ("FEATHERED GRAY FILL", visual_29_02, 7.28, SECONDARY, "Slide29_After"),
+    )
+    for label, image_path, x, signal, shape_name in comparison:
+        add_text(
+            slide, label, x, 2.76, 5.52, 0.30, 12.0, signal,
+            font=HEADER_FONT, bold=True, valign=MSO_ANCHOR.MIDDLE,
+        )
+        add_rect(slide, x, 3.10, 5.52, 3.10, "182338", signal, radius=True, line_width=1.4)
+        if image_path is not None:
+            picture = add_picture_contain(slide, image_path, x + 0.10, 3.20, 5.32, 2.90, dark=True)
+            picture.name = shape_name
+        else:
+            add_visual_placeholder(slide, label, x + 0.10, 3.20, 5.32, 2.90, dark=True)
+
+    add_inline_act_rail(slide, 29)
+    bubble_text = "Nice fix. Don't get comfortable — it comes with a price."
+    add_speech_bubble(slide, bubble_text, 7.20, 4.84, 4.48, 0.92, font_size=13.2)
+    mascot = slide.shapes.add_picture(
+        str(mascot_path),
+        Inches(MASCOT_X),
+        Inches(MASCOT_Y),
+        Inches(MASCOT_SIZE),
+        Inches(MASCOT_SIZE),
+    )
+    mascot.name = "Mascot"
+    configure_speech_overlay_click_timing(prs, 29)
+    add_notes(
+        slide,
+        "A genuinely nice, non-obvious ML-adjacent finding — worth a beat of its own.",
+        visual_spec="Before/after crop of a masked HUD region: hard black rectangle vs. soft gray-blurred patch, same location. [NTPvCode]",
+    )
+
+
+def build_slide_30(prs, visual_30=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "The Gray Fill's Side Effect", font_size=40)
+
+    body = (
+        "The softer fill quietly depressed MASt3R's confidence scores scene-wide, not just where it was applied. A single fixed confidence cutoff then wiped out nearly every pixel in 11 of 13 frames. Fix: a per-frame adaptive gate — each frame's own threshold, floor-protected, with a guaranteed top-256-pixel fallback so no frame is ever wiped to zero. Diagnostic logging added so the next scale shift is visible immediately instead of silent."
+    )
+    add_rect(slide, 1.75, 1.48, 4.62, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.05, 1.74, 4.02, 4.44, 15.2, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A small bar chart: "pixels kept per frame" before (mostly empty bars) vs. after (consistently populated bars). [NTPvChat]'
+    )
+    if visual_30 is not None:
+        picture = add_picture_contain(slide, visual_30, 6.64, 1.48, 6.16, 4.98, dark=False)
+        picture.name = "Slide30_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 6.64, 1.48, 6.16, 4.98, dark=False)
+    add_inline_act_rail(slide, 30)
+    add_notes(
+        slide,
+        "Worth noting quietly, not making a big deal of: the diagnostic logging shipped in the same commit as the fix this time, rather than only after another silent failure forced the issue.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_31(prs, visual_31=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, 'When "Good Enough" Depends on Scale', dark=True, font_size=40)
+
+    body = (
+        "A 3D-distance track-quality gate, measured in MASt3R's own arbitrary units, let bad tracks through whenever the eventual real-world scale factor happened to be large — observed as high as ~18.8×. Replaced with a scale-invariant check: does this point, projected back into its own source frame, land within 5 pixels of where it was actually seen?"
+    )
+    add_rect(slide, 1.75, 1.48, 4.62, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.05, 1.76, 4.02, 4.40, 16.0, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        'A "before" scattered/noisy point cloud vs. "after" clean point cloud, same frame set. [NTPvCode]'
+    )
+    if visual_31 is not None:
+        picture = add_picture_contain(slide, visual_31, 6.64, 1.48, 6.16, 4.98, dark=True)
+        picture.name = "Slide31_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 6.64, 1.48, 6.16, 4.98, dark=True)
+    add_inline_act_rail(slide, 31)
+    add_notes(
+        slide,
+        'Nice concrete example of "the right invariant" fixing a whole class of bug at once.',
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_32(prs, visual_32=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, OFFWHITE)
+    add_title(slide, "Flat Earthers...", font_size=40)
+
+    body = (
+        "Replaced the flat z = 0 ground-plane assumption with an interpolated height field built from the solved 3D points themselves — ray-casting now iterates to find where a ray actually meets the real, bumpy terrain, falling back to flat only if that doesn't converge."
+    )
+    add_rect(slide, 1.75, 1.48, 4.62, 4.98, WHITE, PALE, radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.05, 1.76, 4.02, 4.40, 17.0, PRIMARY,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        "A flat plane's wireframe. On top of it, terrian wireframe, a few rays hit the terrian, converge on one point. The continuation of the rays hit the flat plane at various points on the plane. [NTPvChat]"
+    )
+    if visual_32 is not None:
+        picture = add_picture_contain(slide, visual_32, 6.64, 1.48, 6.16, 4.98, dark=False)
+        picture.name = "Slide32_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 6.64, 1.48, 6.16, 4.98, dark=False)
+    add_inline_act_rail(slide, 32)
+    add_notes(
+        slide,
+        "At that stage, things started looking good. But I wanted to try to do better.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_33(prs, visual_33=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Better is the Enemy of Good", dark=True, font_size=40)
+
+    body = (
+        "An incremental two-stage Ceres solve (lock down the good frames first, register the blurry ones motion-only against that structure). Then, one level deeper: splitting MASt3R's own reconstruction the same way — a clean backbone built only from good frames, with each bad frame individually resectioned against it so it can never contaminate another bad frame or the backbone itself. Unfortunately, neither produced better real-world output."
+    )
+    add_rect(slide, 1.75, 1.48, 4.62, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, body, 2.05, 1.74, 4.02, 4.44, 15.2, OFFWHITE,
+        font=BODY_FONT, valign=MSO_ANCHOR.MIDDLE,
+    )
+    visual_spec = (
+        "An image of the point cloud generated by the last version of the code. [NTPvCode]"
+    )
+    if visual_33 is not None:
+        picture = add_picture_contain(slide, visual_33, 6.64, 1.48, 6.16, 4.98, dark=True)
+        picture.name = "Slide33_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 6.64, 1.48, 6.16, 4.98, dark=True)
+    add_inline_act_rail(slide, 33)
+    add_notes(
+        slide,
+        "Worth mentioning that this whole effort was across half a day. As feedback was already good, we decided to move on to the next challenge, knowing we can continue fighting it another day.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_34(prs, visual_34=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Autonomous, End to End", dark=True, font_size=40)
+
+    items = (
+        "OCR — same as day one, reads GPS/heading/altitude off the HUD overlay",
+        "Undistort + HUD-mask — fisheye correction, then feathered-gray masking of HUD overlays",
+        "Pose — same pose.py as day one, GPS→ENU + a telemetry-prior rotation; no longer feeds the solver, survives only as a diagnostic/alignment reference",
+        "Qwen VL + CLIP anchor discovery — finds the one shared object across all frames (the van), weights each frame by confidence",
+        "MASt3R-SfM — dense 3D reconstruction + camera poses (an optional two-stage split exists — clean backbone from good frames, bad frames individually registered against it — but it's config-gated, not the best-performing state; see Slide 38)",
+        "Ceres bundle adjustment — fuses MASt3R reprojection + anchor-ray constraints into one solve (also has an optional incremental variant, same caveat)",
+        "Sim(3) alignment — the one moment GPS re-enters, purely to set real-world scale/position/rotation",
+        "Surface-aware ray-casting — reprojection against real, non-flat terrain instead of an assumed flat plane",
+        "Interactive Viewer — same click-to-reproject UI from day one",
+    )
+    row_specs = (
+        (1.42, 0.72),
+        (2.22, 0.96),
+        (3.26, 1.30),
+        (4.64, 0.94),
+        (5.66, 0.72),
+    )
+    font_sizes = (8.9, 8.6, 7.7, 8.1, 6.9, 7.7, 8.3, 8.1, 8.8)
+    card_xs = (1.75, 5.58)
+    card_w = 3.70
+    for index, text in enumerate(items):
+        row = index // 2
+        column = index % 2
+        y, h = row_specs[row]
+        x = card_xs[column]
+        add_rect(slide, x, y, card_w, h, DEEP, "334155", radius=True, line_width=0.8)
+        add_text(
+            slide, f"{index + 1:02d}", x + 0.10, y + 0.08, 0.28, 0.18,
+            7.8, SECONDARY, font=HEADER_FONT, bold=True,
+            valign=MSO_ANCHOR.MIDDLE,
+        )
+        add_text(
+            slide, text, x + 0.38, y + 0.07, card_w - 0.48, h - 0.14,
+            font_sizes[index], OFFWHITE, font=BODY_FONT,
+            valign=MSO_ANCHOR.MIDDLE, margin=0.01,
+        )
+
+    final_x, final_y, final_h = card_xs[1], row_specs[-1][0], row_specs[-1][1]
+    add_rect(slide, final_x, final_y, card_w, final_h, "16372D", SECONDARY, radius=True, line_width=1.0)
+    add_text(
+        slide,
+        "No manual correspondences required for the default path.",
+        final_x + 0.18,
+        final_y + 0.09,
+        card_w - 0.36,
+        final_h - 0.18,
+        10.0,
+        SECONDARY,
+        font=HEADER_FONT,
+        bold=True,
+        align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+
+    visual_spec = (
+        "A schematic title-only diagram, same style as Slide 4: Load Frames → OCR → Undistort/HUD-mask → Pose → Qwen/CLIP Anchor → MASt3R → Ceres Bundle Adjustment → Sim(3) Alignment → Surface Ray-cast → Viewer. [NTPvChat]"
+    )
+    if visual_34 is not None:
+        picture = add_picture_contain(slide, visual_34, 9.53, 1.42, 3.27, 4.96, dark=True)
+        picture.name = "Slide34_Visual"
+    else:
+        add_visual_placeholder(slide, visual_spec, 9.53, 1.42, 3.27, 4.96, dark=True)
+    add_inline_act_rail(slide, 34)
+    add_notes(
+        slide,
+        "Nice bookend opportunity — literally the same diagram shape as Slide 4, now much longer. Worth pointing out live which boxes are the same boxes from Slide 1 (OCR, Pose, Viewer) vs. entirely new ones.",
+        visual_spec=visual_spec,
+    )
+
+
+def build_slide_35(prs, video_35=None, poster_35=None):
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_background(slide, PRIMARY)
+    add_title(slide, "Thank you", dark=True, font_size=44)
+
+    add_rect(slide, 1.75, 1.48, 2.35, 4.98, DEEP, "334155", radius=True, line_width=1.2)
+    add_text(
+        slide, "Questions?", 1.92, 2.88, 2.01, 0.90, 22.0, SECONDARY,
+        font=HEADER_FONT, bold=True, align=PP_ALIGN.CENTER,
+        valign=MSO_ANCHOR.MIDDLE,
+    )
+    if video_35 is not None and poster_35 is not None:
+        add_movie_contain(
+            slide, video_35, poster_35, 4.22, 1.48, 8.58, 4.98,
+            "Slide35_Video", dark=True,
+        )
+    else:
+        add_visual_placeholder(
+            slide, "Image of the final product working [NTPvCode]",
+            4.22, 1.48, 8.58, 4.98, dark=True,
+        )
+    add_inline_act_rail(slide, 35)
+    add_notes(slide, "", visual_spec="Image of the final product working [NTPvCode]")
+
+
 def refresh_slides_15_18(prs, visual_15, visual_16, video_17, poster_17, visual_18):
     """Replace Slides 15–18 visual placeholders without changing their text."""
     if len(prs.slides) != 18:
@@ -3261,7 +3528,7 @@ def normalize_slide_10_title(prs):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Build the Raycast Challenge deck through Act VI, skipping Slide 22."
+        description="Build the complete Raycast Challenge deck, skipping Slide 22."
     )
     parser.add_argument(
         "--visuals-dir",
@@ -3352,6 +3619,15 @@ def main():
     visual_27 = find_asset(args.visuals_dir, "Raycast_Slide_27_Visual.png")
     video_28 = find_asset(args.visuals_dir, "Raycast_Slide_28_Visual.mp4")
     poster_28 = find_asset(args.visuals_dir, "Raycast_Slide_28_Poster.jpg")
+    visual_29_01 = find_asset(args.visuals_dir, "Raycast_Slide_29_01_Visual.png")
+    visual_29_02 = find_asset(args.visuals_dir, "Raycast_Slide_29_02_Visual.png")
+    visual_30 = find_asset(args.visuals_dir, "Raycast_Slide_30_Visual.png")
+    visual_31 = find_asset(args.visuals_dir, "Raycast_Slide_31_Visual.png")
+    visual_32 = find_asset(args.visuals_dir, "Raycast_Slide_32_Visual.png")
+    visual_33 = find_asset(args.visuals_dir, "Raycast_Slide_33_Visual.png")
+    visual_34 = find_asset(args.visuals_dir, "Raycast_Slide_34_Visual.png")
+    video_35 = find_asset(args.visuals_dir, "Raycast_Slide_35_Visual.mp4")
+    poster_35 = find_asset(args.visuals_dir, "Raycast_Slide_35_Poster.jpg")
     anchor_dir = args.visuals_dir / "anchor"
     anchor_images = tuple(
         find_asset(anchor_dir, filename)
@@ -3377,9 +3653,9 @@ def main():
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.output.exists():
         prs = Presentation(str(args.output))
-        if len(prs.slides) not in (3, 6, 11, 14, 18, 22, 25, 28):
+        if len(prs.slides) not in (3, 6, 11, 14, 18, 22, 25, 28, 32, 35):
             raise ValueError(
-                f"Expected 3, 6, 11, 14, 18, 22, 25, or 28 existing slides in {args.output}, "
+                f"Expected 3, 6, 11, 14, 18, 22, 25, 28, 32, or 35 existing slides in {args.output}, "
                 f"found {len(prs.slides)}."
             )
         starting_slide_count = len(prs.slides)
@@ -3471,6 +3747,26 @@ def main():
         return
 
     if starting_slide_count == 28:
+        build_slide_29(prs, visual_29_01, visual_29_02, args.mascot)
+        build_slide_30(prs, visual_30)
+        build_slide_31(prs, visual_31)
+        build_slide_32(prs, visual_32)
+        bring_speech_overlays_to_front(prs)
+        prs.save(args.output)
+        print(args.output)
+        return
+
+    if starting_slide_count == 32:
+        build_slide_33(prs, visual_33)
+        build_slide_34(prs, visual_34)
+        build_slide_35(prs, video_35, poster_35)
+        configure_video_click_timing(prs, 35, "Slide35_Video", 119533)
+        prs.save(args.output)
+        externalize_linked_video(args.output, 35, video_35)
+        print(args.output)
+        return
+
+    if starting_slide_count == 35:
         print(args.output)
         return
 
