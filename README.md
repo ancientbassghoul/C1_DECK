@@ -54,3 +54,29 @@ For a build without PowerPoint animations:
 ```powershell
 python .\build_raycast_deck.py --skip-animations
 ```
+
+## Raycast Challenge v3
+
+The approved embedded v3 deck is `presentation_v3.pptx`. The repository version,
+`presentation_v3_linked.pptx`, links to these Git LFS-managed videos instead of
+duplicating them inside the PowerPoint file:
+
+- `visuals/Raycast_Slide_8_Visual_RETIMED.mp4`
+- `visuals/Raycast_Slide_10_Visual.mp4`
+- `visuals/Raycast_Slide_35_Visual.mp4`
+
+Keep the linked presentation at the repository root and preserve the `visuals`
+folder structure. After cloning, run `git lfs pull` before opening the deck.
+PowerPoint playback still requires codecs supported by the presentation machine.
+
+To rebuild the full embedded v3 deck:
+
+```powershell
+.\venv\Scripts\python.exe .\build_raycast_deck_v3.py --through-batch 5 --output .\presentation_v3.pptx
+```
+
+To regenerate the linked copy without modifying the embedded deck:
+
+```powershell
+.\venv\Scripts\python.exe .\create_linked_v3_deck.py
+```

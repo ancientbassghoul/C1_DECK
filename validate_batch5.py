@@ -1,3 +1,4 @@
+import argparse
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -5,7 +6,20 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 
-path = Path(__file__).resolve().parent / "presentation_v3.pptx"
+parser = argparse.ArgumentParser(description="Validate a Raycast Challenge v3 deck.")
+parser.add_argument(
+    "path",
+    nargs="?",
+    type=Path,
+    default=Path(__file__).resolve().parent / "presentation_v3.pptx",
+)
+parser.add_argument(
+    "--linked",
+    action="store_true",
+    help="Require external relative video links and no embedded MP4 payloads.",
+)
+args = parser.parse_args()
+path = args.path.resolve()
 prs = Presentation(path)
 assert len(prs.slides) == 21
 
@@ -68,6 +82,7 @@ assert media_shapes == [
 with ZipFile(path) as archive:
     names = archive.namelist()
     media = sorted(name for name in names if name.startswith("ppt/media/"))
+    video_parts = [name for name in media if name.lower().endswith(".mp4")]
     slide17 = archive.read("ppt/slides/slide17.xml").decode("utf-8")
     assert "presetClass=\"exit\"" in slide17
     assert slide17.count("filter=\"fade\"") == 2
@@ -81,9 +96,29 @@ with ZipFile(path) as archive:
             "ppt/slides/slide21.xml",
         ]
     )
+    if args.linked:
+        assert not video_parts, video_parts
+        linked_videos = {
+            5: "visuals/Raycast_Slide_8_Visual_RETIMED.mp4",
+            7: "visuals/Raycast_Slide_10_Visual.mp4",
+            17: "visuals/Raycast_Slide_35_Visual.mp4",
+        }
+        for slide_number, target in linked_videos.items():
+            rels = archive.read(
+                f"ppt/slides/_rels/slide{slide_number}.xml.rels"
+            ).decode("utf-8")
+            slide_xml = archive.read(f"ppt/slides/slide{slide_number}.xml").decode(
+                "utf-8"
+            )
+            assert rels.count(f'Target="{target}"') == 2
+            assert rels.count('TargetMode="External"') == 2
+            assert "r:link=" in slide_xml and "p14:media" in slide_xml
+    else:
+        assert len(video_parts) == 3, video_parts
 
+media_mode = "linked" if args.linked else "embedded"
 print(
     "Validation passed: 21 slides; Batch 5 text and notes exact; "
-    "3 embedded videos; Slide 17 has two 350 ms exit fades."
+    f"3 {media_mode} videos; Slide 17 has two 350 ms exit fades."
 )
 print(f"Media parts: {len(media)}")
