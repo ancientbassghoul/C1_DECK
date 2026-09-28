@@ -1,150 +1,119 @@
-# We are building a 35 slides deck.
+# Raycast Challenge v3 — Deck-Building Instructions
 
-# This is the design system:
+## Scope and authority
 
-## Presentation structure
+- Build the simplified Raycast Challenge presentation described in `raycast_challenge_deck_for_generator_v3.md`.
+- The v3 blueprint is authoritative for slide order, titles, on-slide text, visuals, and speaker notes.
+- `raycast_challenge_deck_for_generator_v2.md` is historical context only. Do not restore its act structure, jokes, mascot, speech bubbles, or omitted deep dives unless v3 explicitly requests them.
+- The presentation contains Slides 1–19, followed by Appendix A1, followed by the simple closing Slide 20.
+- Do not merge slides. Do not silently omit, summarize, or rewrite blueprint text.
 
-The deck is an engineering war story with eleven acts:
+## Critical file-safety rule
 
-| Act                          | Slides | Narrative job                                                                  |
-| ---------------------------- | -----: | ------------------------------------------------------------------------------ |
-| 0 — The Setup                |    1–3 | Establish the challenge, evidence bar, and hostile dataset                     |
-| I — Bring-Up                 |    4–6 | Show the surprisingly mature first pipeline—and its first wrong assumptions    |
-| II — By Hand, For Now        |   7–11 | Build a trusted manual baseline and discover the recurring “good core” pattern |
-| III — Asking for Directions  |  12–18 | Pause, report honestly, seek guidance, and reject an attractive diversion      |
-| IV — Starting Over           |  19–23 | Perform the architectural rewrite and establish cloud/local development        |
-| V — How the New Brain Thinks |  24–25 | Explain the new open-world anchor-discovery pipeline                           |
-| VI — The Bug Hunt            |  26–28 | Reveal model-integration and dataset-calibration failures                      |
-| VII — Tuning the Machine     |  29–32 | Replace brittle thresholds and assumptions with adaptive, observable methods   |
-| VIII — The Hunger            |     33 | Show the reconstruction pipeline's resource demands                            |
-| IX — Where It Landed         |  34–35 | Present the autonomous final pipeline and working outcome                      |
+- `presentation.pptx` is read-only reference material. Do not modify, overwrite, rename, delete, or append slides to it.
+- Any future builder must write to a different output file, preferably `presentation_v3.pptx`.
+- Any future builder code must live in a new file, preferably `build_raycast_deck_v3.py`; do not overwrite the existing builder merely to create v3.
+- Before and after a build, verify that `presentation.pptx` is unchanged.
 
-The narrative progression is:
+## Presentation direction
 
-**Hard challenge → manual truth → external guidance → architectural reset → invisible failures → better observability → empirical humility → autonomous result.**
+This is a concise technical case study, not the earlier engineering-war-story version. Its narrative is:
 
-The central recurring idea is:
+**Task → difficulty → brief failed approaches → manual diagnostic baseline → architectural solution → key debugging discoveries → visual proof → numerical proof → appendix → clean close.**
 
-> **Trust a good core, then extend outward carefully.**
+Keep the tone direct, technical, and evidence-led.
 
-It appears first in manual matching, returns in confidence weighting, and culminates in the two-stage MASt3R strategy. Slide 39 should visually bookend Slide 4’s pipeline diagram.
+- No jokes.
+- No mascot.
+- No speech bubbles or mascot animations.
+- No persistent act/subway rail.
+- No act-opening slides.
+- Do not add decorative UI, fake dashboards, or ornamental icons.
 
-## Core themes
+## Design system to retain
 
-* Telemetry, model confidence, and “reasonable” defaults are all uncertain sensor readings.
-* Debugging tools are part of the architecture—not secondary utilities.
-* A silent fallback is often more dangerous than a crash.
-* General technical advice must be recalibrated against the actual dataset.
-* Elegant reasoning does not outrank empirical output.
-* Engineering judgment includes deleting work, rejecting pivots, and knowing when to stop.
+### Palette
 
-## Confirmed Design System
+| Role | Color | HEX | Usage |
+|---|---|---:|---|
+| Primary | Midnight Telemetry | `#101827` | Main dark background, headings, technical structure |
+| Secondary | Target Green | `#27E38D` | Working, trusted, retained, successful |
+| Accent | Failure Coral | `#FF5B5B` | Failed, regressed, warning, known defect |
 
-### Three-color palette
-
-| Role      | Color              |       HEX | Usage                                                         |
-| --------- | ------------------ | --------: | ------------------------------------------------------------- |
-| Primary   | Midnight Telemetry | `#101827` | Main dark background, headings, technical structure           |
-| Secondary | Target Green       | `#27E38D` | Working, trusted, retained, successful, current position      |
-| Accent    | Failure Coral      | `#FF5B5B` | Removed, broken, regressed, warnings, crossed-out assumptions |
-
-White, warm off-white, and neutral gray may support readability, but they carry no narrative meaning.
-
-Green and red will never be the only distinction: success also uses solid lines/checks; failure uses strike-throughs, breaks, crosses, or dashed treatment.
+White, warm off-white, and neutral gray may support readability but carry no narrative meaning. Green and coral must never be the only distinction; reinforce meaning with labels, line treatment, checks, crosses, or other visible structure.
 
 ### Typography
 
-* **Headers:** Bahnschrift SemiBold
-  Technical, condensed, and visually related to telemetry/HUD typography.
+- Headers: Bahnschrift SemiBold
+- Body: Aptos
+- Code, filenames, flags, and log text: Cascadia Mono
+- Deck title: 54–60 pt
+- Slide title: 36–42 pt
+- Major result/callout: 24–32 pt
+- Body: 18–22 pt
+- Code: 17–22 pt
 
-* **Body:** Aptos
-  Highly readable for explanations, annotations, and speaker-facing technical material.
+### Layout language
 
-* **Code exception:** Cascadia Mono
-  Reserved for filenames, flags, code, configuration values, and log output.
+Use the smallest, clearest visual structure for each claim:
 
-Recommended hierarchy:
+- Cinematic Evidence Frame for footage, screenshots, point clouds, and proof artifacts.
+- Split Diagnosis for before/after or approach/failure comparisons.
+- Pipeline Spine for multi-step technical flows.
+- A simple two-column comparison for Slide 4.
+- A dominant heatmap with restrained numeric callouts for Slide 19.
 
-* Deck title: 54–60 pt
-* Slide title: 36–42 pt
-* Callout: 24–28 pt
-* Body: 18–22 pt
-* Code: 17–22 pt
+Prefer one primary claim and approximately 3–5 visual units per slide. Avoid dense card grids, excessive pills/badges, and dashboard styling. A sequence of 3–6 actions should normally become a pipeline. A comparison should read spatially before it is read as text.
 
-### Four reusable layout formats
+## Text integrity
 
-1. **Cinematic Evidence Frame**
-   Full-bleed drone footage, screenshot, Blender view, or point cloud. One large claim with restrained annotations, crosshairs, rays, or bounding boxes.
+- Include every title, kicker/subtitle, body item, visual instruction, and speaker note specified in v3.
+- Every dash under `Body:` is a distinct text item unless the blueprint explicitly defines a table or another structure.
+- Do not invent additional technical claims or performance claims.
+- Do not promote speaker-note material into on-slide text unless the blueprint says to do so.
+- Minor mechanical corrections such as filename escaping or typographic punctuation are allowed only when meaning is unchanged.
 
-2. **Split Diagnosis**
-   Before/after, expected/observed, old/new, deleted/added, or working/failing. The comparison should be visible spatially before the audience reads it.
+## Visual and media handling
 
-3. **Pipeline Spine**
-   A strong left-to-right technical flow with the current transformation emphasized. Slide 4 establishes the visual grammar; Slide 39 returns to it with the completed architecture.
+- Use the visual specified for each slide when it exists.
+- Preserve the visual's aspect ratio; crop intentionally rather than stretching.
+- For video slides, use the specified poster frame and video asset. Keep the poster visible if playback is unavailable.
+- Slide 3 references source images outside `visuals`; if they are unavailable at build time, use a clearly labeled placeholder and report the missing paths.
+- Slide 18 must use `results_slide/How_we_measure_Visual.png` as its measurement-method evidence.
+- Slide 19 must use `results_slide/score_pairs_matrix.png` as the dominant artifact.
+- Do not substitute the obsolete rough `6 / 6 / 1` result summary for the measured 650-cross-check evaluation in `results_slide`.
+- If a specified asset is missing, insert a clearly labeled placeholder rather than silently changing the intended content.
 
-4. **Trusted Core + Perimeter**
-   A solid central backbone with uncertain frames, sensors, or hypotheses extending around it. This becomes the visual signature for the recurring “trust a good core” principle.
+## Results-slide integrity
 
-Code excerpts, charts, and number lines use the **Cinematic Evidence** format: one dominant artifact rather than a dashboard of small panels.
+The authoritative measured results are in:
 
-## Rules for converting text into visuals
+- `results_slide/score_pairs_summary.txt`
+- `results_slide/score_summary.txt`
+- `results_slide/score_pairs_matrix.png`
 
-* A sequence of 3–6 actions becomes a pipeline, not bullets.
-* Two opposing states become a split composition.
-* A threshold or distribution becomes a number line or compact chart.
-* “Kept versus deleted” becomes solid green versus struck-out red.
-* A central trusted set with uncertain additions becomes the core-and-perimeter format.
-* A bug is shown through its evidence: code, logs, incorrect bbox, matrix fingerprint, or before/after output.
-* Icons must encode concrete meaning. No decorative icon beside every bullet.
-* Technical icons use one consistent thin-outline style and retain short labels.
-* Avoid dense card grids, pills, badges, and dashboard-like UI styling.
-* Limit the audience to one primary claim and approximately 3–5 visual units per slide.
-* Use progressive reveals for complex pipelines and comparisons.
+`results_slide/Results_summary_ELI5.md` is optional explanatory context only. Do not depend on its prose or copy it into the deck; the two score summaries and matrix are the authoritative sources.
 
-## Persistent act navigation
+For the main result, preserve these distinctions:
 
-The left rail remains visible throughout:
+- 7 ground features, 62 manual marks, and 650 directed source/target cross-checks.
+- 649 checks project into-frame; one projects out-of-frame; there are no ray misses.
+- Median view error across the pairwise evaluation is 4.05 m.
+- Median image error is 38.9 px; 48/649 in-frame checks, approximately 7%, are within 10 px.
+- The first and fresh picking sessions produced approximately 4.2 m and 4.0 m respectively, showing repeatability.
+- Best source frames are `04709` at 2.67 m and `12035` at 2.77 m; worst is `04569` at 8.08 m.
+- Frame `05934` has a known physically invalid camera solution below the ground with flipped orientation.
+- Pixel error is range-dependent and favors distant, zoomed-out frames. The metre-based view error is the headline comparison metric.
 
-* All ten rail labels are always present.
-* Only the current act displays its slide-station dots.
-* The current station uses Target Green.
-* Completed stations are solid but muted.
-* Upcoming stations are outlined.
-* The full current-act name appears at the upper-left.
-* The rail remains structurally identical in dark and light slide modes.
+Do not claim that the original ≤10 px target was achieved across the dataset. The intended claim is that the system produces a stable, measurable cross-frame solution that generally finds the correct area despite the hostile imagery, with known error and a clearly identified failure mode.
 
-## Visual rhythm
+## Build validation for future implementation
 
-The alternation between dark and bright slides will be deliberate:
+Before delivery, verify:
 
-* **Dark mode:** act openings, architectural pivots, severe bugs, the twist, and major conclusions.
-* **Light mode:** technical explanation, evidence comparison, tooling, and calibration.
-* **Full-image mode:** moments where real footage or generated imagery should carry the emotional weight.
-
-The source footage is naturally subdued—blue-gray sky, brown terrain, dark green fields, and extreme white sun—so the green/red signals will remain legible without competing with it.
-
-Speech bubbles and the mascot will always be final click-triggered overlays. The underlying slide will not reserve space or distort its composition for them.
-
-This Design System is confirmed as the visual contract for the deck.
-
-# CRITICAL SCRIPT INTEGRITY RULE:
-1. NON-DESTRUCTIVE MODIFICATION: Do NOT rewrite or delete any layout code, text, or image insertion lines (`add_picture`) built for previous slides.
-2. FILE EDIT METHOD: Load the existing `presentation.pptx` file using `prs = Presentation('presentation.pptx')` and append the new Act slides to the existing presentation object.
-3. PRESERVE ALL ASSETS: Verify that all previously inserted images (e.g., `slide_01_hero.png`) remain untouched in their respective slides before saving the updated `.pptx` file.
-
-# STRICT EXECUTION REQUIREMENT: You are a Python pptx builder.
-Your blueprint for the deck is raycast_challenge_deck_for_generator_v2.md
-Do NOT summarize, rephrase, omit, merge, or shorten ANY text from the raycast_challenge_deck_for_generator_v2.md file.
-The text is ALREADY slide-ready.
-
-KEEP THESE RULS AT ALL TIMES:
-
-1. VERBATIM TEXT: Every dash (`-`) under `Body:` MUST be its own distinct text item/card.
-2. LAYOUTS: Use 2-column grids for slides with 4+ items.
-3. SPEECH BUBBLES: Format all "Speech bubble:" lines as a single native PowerPoint **Rounded Rectangular Callout** (`MSO_SHAPE.ROUNDED_RECTANGULAR_CALLOUT`, PowerPoint geometry `wedgeRoundRectCallout`) in the bottom corner. NEVER construct a speech bubble from a rounded rectangle plus a separate triangle/tail or a separate text box. Reproduce the established overlay construction exactly: add a completely invisible rectangle named `Mascot_Pivot_Frame` whose bounds enclose the visible callout and mascot and are symmetric around the mascot/portal center. This frame intentionally extends outside the slide, farther down and to the right, so the group's bounding-box center equals the portal center. Group the native callout, mascot, and `Mascot_Pivot_Frame` into one foreground `SpeechOverlay_Group`. The final click Zoom entrance MUST target only `SpeechOverlay_Group`—never its individual children—so callout and mascot scale together from the portal center.
-4. SUBWAY MAP: Maintain the Act rail widget on the left edge (highlighting Act [X] and current slide dots).
-5. KICKERS: Include all "Kicker/subtitle:" text under slide titles.
-
-# VISUALS
-Visuals for the slides will be in the "visuals" folder. When creating a slide, if you see a visual for that slide in the visuals folder - use it. If not - put a place holder for the visual in the presentation.
-
+- Slides 1–19, Appendix A1, and closing Slide 20 are present and ordered exactly as v3.
+- All specified text is present.
+- All supplied images, posters, and videos are used on their intended slides.
+- Slide 19's heatmap remains legible at presentation scale.
+- The output opens successfully in PowerPoint.
+- `presentation.pptx` remains unchanged.
